@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 
@@ -22,6 +21,8 @@ interface AuthContextType {
   updateUser: (userId: string, userData: Partial<User>) => boolean;
   deleteUser: (userId: string) => boolean;
   addUser: (userData: Omit<User, 'id' | 'status'>) => boolean;
+  isAdminMode: boolean;
+  returnToAdmin: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -70,17 +71,21 @@ let mockUsers: User[] = [
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdminMode, setIsAdminMode] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
+    const originalAdmin = localStorage.getItem('originalAdmin');
     
     if (token && userData) {
       try {
         setUser(JSON.parse(userData));
+        setIsAdminMode(!!originalAdmin);
       } catch (error) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('originalAdmin');
       }
     }
     setLoading(false);
@@ -123,7 +128,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('originalAdmin');
     setUser(null);
+    setIsAdminMode(false);
   };
 
   const updateUserStatus = (status: 'working' | 'break' | 'offline', breakStartTime?: string) => {
@@ -154,9 +161,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       localStorage.setItem('user', JSON.stringify(targetUser));
       localStorage.setItem('originalAdmin', JSON.stringify(user));
       setUser(targetUser);
+      setIsAdminMode(true);
       return true;
     }
     return false;
+  };
+
+  const returnToAdmin = () => {
+    const originalAdmin = localStorage.getItem('originalAdmin');
+    if (originalAdmin) {
+      try {
+        const adminUser = JSON.parse(originalAdmin);
+        localStorage.setItem('user', JSON.stringify(adminUser));
+        localStorage.removeItem('originalAdmin');
+        setUser(adminUser);
+        setIsAdminMode(false);
+        toast({
+          title: "Возврат в админ-панель",
+          description: "Вы вернулись в режим администратора",
+        });
+      } catch (error) {
+        console.error('Error returning to admin:', error);
+      }
+    }
   };
 
   const getAllUsers = (): User[] => {
@@ -202,7 +229,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       getAllUsers,
       updateUser,
       deleteUser,
-      addUser
+      addUser,
+      isAdminMode,
+      returnToAdmin
     }}>
       {children}
     </AuthContext.Provider>

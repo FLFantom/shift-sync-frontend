@@ -1,14 +1,13 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Play, Pause, Coffee, LogOut, Settings } from 'lucide-react';
+import { Clock, Play, Pause, Coffee, LogOut, Settings, ArrowLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
-  const { user, logout, updateUserStatus } = useAuth();
+  const { user, logout, updateUserStatus, isAdminMode, returnToAdmin } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [breakDuration, setBreakDuration] = useState('');
   const navigate = useNavigate();
@@ -98,6 +97,11 @@ const Dashboard = () => {
     navigate('/login');
   };
 
+  const handleReturnToAdmin = () => {
+    returnToAdmin();
+    navigate('/admin');
+  };
+
   if (!user) return null;
 
   const isBreakOvertime = user.status === 'break' && user.breakStartTime && 
@@ -118,7 +122,16 @@ const Dashboard = () => {
           </div>
           
           <div className="flex items-center space-x-4">
-            {user.role === 'admin' && (
+            {isAdminMode && (
+              <Button
+                onClick={handleReturnToAdmin}
+                className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Вернуться в админ-панель
+              </Button>
+            )}
+            {user.role === 'admin' && !isAdminMode && (
               <Button
                 onClick={() => navigate('/admin')}
                 variant="outline"
