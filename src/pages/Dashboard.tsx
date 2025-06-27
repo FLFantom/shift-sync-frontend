@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTimeAction, useReportLateness, useNotifyBreakExceeded } from '../hooks/useTimeActions';
@@ -103,7 +102,10 @@ const Dashboard = () => {
   };
 
   const handleStartWork = async () => {
-    if (!user) return;
+    if (!user || user.status === 'working') {
+      console.log('User already working or user not found');
+      return;
+    }
 
     try {
       const startTime = new Date();
@@ -122,7 +124,7 @@ const Dashboard = () => {
         const lateSeconds = workStartTime - nineAM;
         const lateMinutes = Math.floor(lateSeconds / 60);
         
-        // Отправка уведомления об опоздании
+        // Отправка уведомления об опоздании с userId
         reportLatenessMutation.mutate({
           userId: user.id,
           userName: user.name,
@@ -148,6 +150,11 @@ const Dashboard = () => {
   };
 
   const handleStartBreak = async () => {
+    if (!user || user.status !== 'working') {
+      console.log('User not working or user not found');
+      return;
+    }
+
     try {
       await timeActionMutation.mutateAsync({ action: 'start_break' });
       updateUserStatus('break');
@@ -161,6 +168,11 @@ const Dashboard = () => {
   };
 
   const handleEndBreak = async () => {
+    if (!user || user.status !== 'break') {
+      console.log('User not on break or user not found');
+      return;
+    }
+
     try {
       await timeActionMutation.mutateAsync({ action: 'end_break' });
       updateUserStatus('working');
@@ -174,6 +186,11 @@ const Dashboard = () => {
   };
 
   const handleEndWork = async () => {
+    if (!user || user.status === 'offline') {
+      console.log('User already offline or user not found');
+      return;
+    }
+
     try {
       await timeActionMutation.mutateAsync({ action: 'end_work' });
       updateUserStatus('offline');
@@ -304,9 +321,9 @@ const Dashboard = () => {
                   onClick={handleStartWork}
                   size="lg"
                   className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8 py-4 text-lg font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                  disabled={timeActionMutation.isPending}
+                  disabled={timeActionMutation.isPending || user.status === 'working'}
                 >
-                  Начать работу
+                  {user.status === 'working' ? 'Уже работаете' : 'Начать работу'}
                 </Button>
               </CardContent>
             </Card>
@@ -326,9 +343,9 @@ const Dashboard = () => {
                   onClick={handleStartBreak}
                   size="lg"
                   className="bg-gradient-to-r from-orange-500 to-yellow-600 hover:from-orange-600 hover:to-yellow-700 text-white px-8 py-4 text-lg font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                  disabled={timeActionMutation.isPending}
+                  disabled={timeActionMutation.isPending || user.status !== 'working'}
                 >
-                  Начать перерыв
+                  {user.status !== 'working' ? 'Сначала начните работу' : 'Начать перерыв'}
                 </Button>
               </CardContent>
             </Card>
@@ -348,9 +365,9 @@ const Dashboard = () => {
                   onClick={handleEndWork}
                   size="lg"
                   className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white px-8 py-4 text-lg font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                  disabled={timeActionMutation.isPending}
+                  disabled={timeActionMutation.isPending || user.status === 'offline'}
                 >
-                  Завершить день
+                  {user.status === 'offline' ? 'День завершен' : 'Завершить день'}
                 </Button>
               </CardContent>
             </Card>
