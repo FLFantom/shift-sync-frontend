@@ -61,14 +61,22 @@ class ApiClient {
     const token = localStorage.getItem('token');
     return {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
       ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  }
+
+  private getBasicHeaders() {
+    return {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true'
     };
   }
 
   async login(data: LoginRequest): Promise<LoginResponse> {
     const response = await fetch(`${API_BASE_URL}/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getBasicHeaders(),
       body: JSON.stringify(data)
     });
 
