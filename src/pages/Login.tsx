@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useLogin } from '../hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,20 +12,28 @@ import { Clock, Mail, Lock } from 'lucide-react';
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { setUser, setToken } = useAuth();
   const navigate = useNavigate();
+  const loginMutation = useLogin();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     
-    const success = await login(email, password);
-    if (success) {
-      navigate('/dashboard');
+    try {
+      const response = await loginMutation.mutateAsync({ email, password });
+      
+      setUser(response.user);
+      setToken(response.token);
+      
+      // Редирект в зависимости от роли
+      if (response.user.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
     }
-    
-    setLoading(false);
   };
 
   return (
@@ -81,9 +90,9 @@ const Login = () => {
             <Button
               type="submit"
               className="w-full h-12 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-              disabled={loading}
+              disabled={loginMutation.isPending}
             >
-              {loading ? (
+              {loginMutation.isPending ? (
                 <div className="flex items-center space-x-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   <span>Вход...</span>
@@ -93,14 +102,6 @@ const Login = () => {
               )}
             </Button>
           </form>
-          
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-gray-600 font-medium mb-2">Тестовые аккаунты:</p>
-            <div className="space-y-1 text-xs text-gray-500">
-              <p>Пользователь: ivan@company.com / 123456</p>
-              <p>Админ: admin@company.com / 123456</p>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>
