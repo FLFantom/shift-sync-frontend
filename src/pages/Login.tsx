@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,12 +21,18 @@ const Login = () => {
     try {
       const response = await loginMutation.mutateAsync({ email, password });
       
-      setUser(response.user);
+      // Add default status to user object to match User interface
+      const userWithStatus = {
+        ...response.user,
+        status: 'offline' as const
+      };
+      
+      setUser(userWithStatus);
       setToken(response.token);
       
       // Редирект в зависимости от роли
       if (response.user.role === 'admin') {
-        navigate('/admin');
+        navigate('/admin-panel');
       } else {
         navigate('/dashboard');
       }
