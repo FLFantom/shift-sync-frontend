@@ -1,4 +1,5 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLogin } from '../hooks/useAuth';
@@ -6,14 +7,28 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Mail, Lock } from 'lucide-react';
+import { Clock, Mail, Lock, Smartphone } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
   const { setUser, setToken } = useAuth();
   const navigate = useNavigate();
   const loginMutation = useLogin();
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+      const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+      const isMobileDevice = mobileRegex.test(userAgent.toLowerCase()) || window.innerWidth <= 768;
+      setIsMobile(isMobileDevice);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +55,48 @@ const Login = () => {
       console.error('Login error:', error);
     }
   };
+
+  if (isMobile) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-600 via-orange-600 to-red-800 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/20"></div>
+        
+        <Card className="w-full max-w-md relative z-10 backdrop-blur-sm bg-white/95 shadow-2xl border-0">
+          <CardHeader className="text-center space-y-4">
+            <div className="mx-auto w-16 h-16 bg-gradient-to-r from-red-500 to-orange-600 rounded-full flex items-center justify-center">
+              <Smartphone className="w-8 h-8 text-white" />
+            </div>
+            <CardTitle className="text-2xl font-bold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
+              Доступ ограничен
+            </CardTitle>
+            <CardDescription className="text-gray-600">
+              Вход с мобильных устройств запрещен
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent className="text-center space-y-4">
+            <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+              <p className="text-red-800 font-medium mb-2">
+                Система учета времени недоступна на мобильных устройствах
+              </p>
+              <p className="text-red-600 text-sm">
+                Пожалуйста, используйте компьютер или ноутбук для входа в систему
+              </p>
+            </div>
+            
+            <div className="text-sm text-gray-500">
+              <p>Для работы с системой требуется:</p>
+              <ul className="mt-2 space-y-1">
+                <li>• Компьютер или ноутбук</li>
+                <li>• Браузер Chrome, Firefox или Safari</li>
+                <li>• Стабильное интернет-соединение</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-800 flex items-center justify-center p-4">
