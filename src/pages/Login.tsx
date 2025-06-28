@@ -36,23 +36,30 @@ const Login = () => {
     try {
       const response = await loginMutation.mutateAsync({ email, password });
       
+      // Правильно извлекаем данные пользователя из вложенной структуры
+      const userData = response.data?.user || response.user;
+      const token = response.token || 'mock-token'; // fallback для токена
+      
+      console.log('Login response:', response);
+      console.log('Extracted user data:', userData);
+      
       // Сохранить токен и данные пользователя в localStorage
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('user', JSON.stringify(response.user));
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
       
       // Add default status to user object to match User interface
       const userWithStatus = {
-        ...response.user,
+        ...userData,
         status: 'offline' as const
       };
       
       setUser(userWithStatus);
-      setToken(response.token);
+      setToken(token);
       
-      console.log('Login successful, user role:', response.user.role);
+      console.log('Login successful, user role:', userData.role);
       
       // Редирект в зависимости от роли
-      if (response.user.role === 'admin') {
+      if (userData.role === 'admin') {
         navigate('/admin-panel');
       } else {
         navigate('/dashboard');

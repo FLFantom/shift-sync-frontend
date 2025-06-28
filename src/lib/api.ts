@@ -90,7 +90,7 @@ class ApiClient {
     return response;
   }
 
-  async login(data: LoginRequest): Promise<LoginResponse> {
+  async login(data: LoginRequest): Promise<any> {
     const response = await fetch(`${API_BASE_URL}/login`, {
       method: 'POST',
       headers: this.getBasicHeaders(),
@@ -101,7 +101,11 @@ class ApiClient {
       throw new Error('Login failed');
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log('Raw API response:', result);
+    
+    // Возвращаем весь ответ, чтобы Login.tsx мог правильно его обработать
+    return result;
   }
 
   async timeAction(data: TimeActionRequest): Promise<void> {

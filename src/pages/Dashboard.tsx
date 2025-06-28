@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTimeAction, useReportLateness, useNotifyBreakExceeded } from '../hooks/useTimeActions';
@@ -29,7 +28,7 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    // Очищаем предыдущий интервал
+    // Полностью очищаем предыдущий интервал
     if (breakIntervalRef.current) {
       clearInterval(breakIntervalRef.current);
       breakIntervalRef.current = null;
@@ -66,8 +65,9 @@ const Dashboard = () => {
       updateBreakDuration();
       breakIntervalRef.current = setInterval(updateBreakDuration, 1000);
     } else {
-      // Сброс таймера перерыва когда пользователь не на перерыве
+      // Принудительно сбрасываем таймер и очищаем состояние когда пользователь не на перерыве
       setBreakDuration('');
+      breakExceededNotifiedRef.current = false;
     }
 
     // Cleanup function
@@ -219,14 +219,19 @@ const Dashboard = () => {
         breakDuration: breakDurationMinutes
       });
       
-      // Принудительно останавливаем таймер и очищаем состояние
+      // Немедленно останавливаем таймер и очищаем все состояния
       if (breakIntervalRef.current) {
         clearInterval(breakIntervalRef.current);
         breakIntervalRef.current = null;
       }
-      setBreakDuration('');
       
+      // Принудительно очищаем состояние таймера
+      setBreakDuration('');
+      breakExceededNotifiedRef.current = false;
+      
+      // Обновляем статус пользователя ПОСЛЕ очистки таймера
       updateUserStatus('working');
+      
       toast({
         title: "Перерыв окончен",
         description: "Добро пожаловать обратно!",
