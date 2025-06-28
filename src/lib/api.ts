@@ -1,4 +1,3 @@
-
 const API_BASE_URL = 'https://gelding-able-sailfish.ngrok-free.app/webhook';
 
 export interface LoginRequest {
@@ -18,6 +17,8 @@ export interface LoginResponse {
 
 export interface TimeActionRequest {
   action: 'start_work' | 'start_break' | 'end_break' | 'end_work';
+  userId?: string;
+  breakDuration?: number;
 }
 
 export interface LatenessReportRequest {

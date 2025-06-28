@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTimeAction, useReportLateness, useNotifyBreakExceeded } from '../hooks/useTimeActions';
@@ -58,6 +59,9 @@ const Dashboard = () => {
       updateBreakDuration();
       const interval = setInterval(updateBreakDuration, 1000);
       return () => clearInterval(interval);
+    } else {
+      // Сброс таймера перерыва когда пользователь не на перерыве
+      setBreakDuration('');
     }
   }, [user?.status, user?.breakStartTime, user, notifyBreakExceededMutation]);
 
@@ -101,6 +105,13 @@ const Dashboard = () => {
     });
   };
 
+  const calculateBreakDurationInMinutes = () => {
+    if (!user?.breakStartTime) return 0;
+    const breakStart = new Date(user.breakStartTime);
+    const now = new Date();
+    return Math.floor((now.getTime() - breakStart.getTime()) / (1000 * 60));
+  };
+
   const handleStartWork = async () => {
     if (!user || user.status === 'working') {
       console.log('User already working or user not found');
@@ -110,8 +121,11 @@ const Dashboard = () => {
     try {
       const startTime = new Date();
       
-      // Шаг 1: Фиксация времени
-      await timeActionMutation.mutateAsync({ action: 'start_work' });
+      // Шаг 1: Фиксация времени с userId
+      await timeActionMutation.mutateAsync({ 
+        action: 'start_work',
+        userId: user.id
+      });
       
       // Обновляем статус локально
       updateUserStatus('working');
@@ -156,7 +170,10 @@ const Dashboard = () => {
     }
 
     try {
-      await timeActionMutation.mutateAsync({ action: 'start_break' });
+      await timeActionMutation.mutateAsync({ 
+        action: 'start_break',
+        userId: user.id
+      });
       updateUserStatus('break');
       toast({
         title: "Перерыв начат",
@@ -174,7 +191,13 @@ const Dashboard = () => {
     }
 
     try {
-      await timeActionMutation.mutateAsync({ action: 'end_break' });
+      const breakDurationMinutes = calculateBreakDurationInMinutes();
+      
+      await timeActionMutation.mutateAsync({ 
+        action: 'end_break',
+        userId: user.id,
+        breakDuration: breakDurationMinutes
+      });
       updateUserStatus('working');
       toast({
         title: "Перерыв окончен",
@@ -192,7 +215,10 @@ const Dashboard = () => {
     }
 
     try {
-      await timeActionMutation.mutateAsync({ action: 'end_work' });
+      await timeActionMutation.mutateAsync({ 
+        action: 'end_work',
+        userId: user.id
+      });
       updateUserStatus('offline');
       toast({
         title: "Рабочий день окончен",
@@ -220,7 +246,7 @@ const Dashboard = () => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              {getGreeting()}, {user.name}!
+              {getGreeting()}, {user?.name || 'Пользователь'}!
             </h1>
             <p className="text-gray-600 mt-1">
               {formatDate(currentTime)}
@@ -307,20 +333,20 @@ const Dashboard = () => {
         ) : (
           <div className="grid md:grid-cols-3 gap-6">
             <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-              <CardContent className="text-center py-8 px-4">
+              <CardContent className="text-center py-8 px-4 flex flex-col h-full">
                 <div className="w-20 h-20 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Play className="w-10 h-10 text-white" />
                 </div>
                 <h3 className="text-2xl font-bold text-gray-800 mb-4">
                   Начать работу
                 </h3>
-                <p className="text-gray-600 mb-6">
+                <p className="text-gray-600 mb-6 flex-grow">
                   Зафиксировать начало рабочего дня
                 </p>
                 <Button
                   onClick={handleStartWork}
                   size="lg"
-                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-4 text-base font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 w-full"
+                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-4 text-base font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 w-full mt-auto"
                   disabled={timeActionMutation.isPending || user.status === 'working'}
                 >
                   {user.status === 'working' ? 'Уже работаете' : 'Начать работу'}
@@ -329,20 +355,20 @@ const Dashboard = () => {
             </Card>
 
             <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-              <CardContent className="text-center py-8 px-4">
+              <CardContent className="text-center py-8 px-4 flex flex-col h-full">
                 <div className="w-20 h-20 bg-gradient-to-r from-orange-400 to-yellow-500 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Pause className="w-10 h-10 text-white" />
                 </div>
                 <h3 className="text-2xl font-bold text-gray-800 mb-4">
                   Перерыв
                 </h3>
-                <p className="text-gray-600 mb-6">
+                <p className="text-gray-600 mb-6 flex-grow">
                   Зафиксировать начало перерыва
                 </p>
                 <Button
                   onClick={handleStartBreak}
                   size="lg"
-                  className="bg-gradient-to-r from-orange-500 to-yellow-600 hover:from-orange-600 hover:to-yellow-700 text-white px-6 py-4 text-base font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 w-full"
+                  className="bg-gradient-to-r from-orange-500 to-yellow-600 hover:from-orange-600 hover:to-yellow-700 text-white px-6 py-4 text-base font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 w-full mt-auto"
                   disabled={timeActionMutation.isPending || user.status !== 'working'}
                 >
                   {user.status !== 'working' ? 'Сначала начните работу' : 'Начать перерыв'}
@@ -351,20 +377,20 @@ const Dashboard = () => {
             </Card>
 
             <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-              <CardContent className="text-center py-8 px-4">
+              <CardContent className="text-center py-8 px-4 flex flex-col h-full">
                 <div className="w-20 h-20 bg-gradient-to-r from-red-400 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Clock className="w-10 h-10 text-white" />
                 </div>
                 <h3 className="text-2xl font-bold text-gray-800 mb-4">
                   Завершить день
                 </h3>
-                <p className="text-gray-600 mb-6">
+                <p className="text-gray-600 mb-6 flex-grow">
                   Зафиксировать окончание рабочего дня
                 </p>
                 <Button
                   onClick={handleEndWork}
                   size="lg"
-                  className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white px-6 py-4 text-base font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 w-full"
+                  className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white px-6 py-4 text-base font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 w-full mt-auto"
                   disabled={timeActionMutation.isPending || user.status === 'offline'}
                 >
                   {user.status === 'offline' ? 'День завершен' : 'Завершить день'}
