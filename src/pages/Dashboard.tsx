@@ -230,7 +230,7 @@ const Dashboard = () => {
           <div className="flex items-center space-x-4">
             {user.role === 'admin' && (
               <Button
-                onClick={() => navigate('/admin')}
+                onClick={() => navigate('/admin-panel')}
                 variant="outline"
                 className="border-blue-200 text-blue-600 hover:bg-blue-50"
               >
@@ -307,7 +307,7 @@ const Dashboard = () => {
         ) : (
           <div className="grid md:grid-cols-3 gap-6">
             <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-              <CardContent className="text-center py-12">
+              <CardContent className="text-center py-8 px-4">
                 <div className="w-20 h-20 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Play className="w-10 h-10 text-white" />
                 </div>
@@ -320,7 +320,7 @@ const Dashboard = () => {
                 <Button
                   onClick={handleStartWork}
                   size="lg"
-                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8 py-4 text-lg font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-4 text-base font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 w-full"
                   disabled={timeActionMutation.isPending || user.status === 'working'}
                 >
                   {user.status === 'working' ? 'Уже работаете' : 'Начать работу'}
@@ -329,7 +329,7 @@ const Dashboard = () => {
             </Card>
 
             <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-              <CardContent className="text-center py-12">
+              <CardContent className="text-center py-8 px-4">
                 <div className="w-20 h-20 bg-gradient-to-r from-orange-400 to-yellow-500 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Pause className="w-10 h-10 text-white" />
                 </div>
@@ -342,7 +342,7 @@ const Dashboard = () => {
                 <Button
                   onClick={handleStartBreak}
                   size="lg"
-                  className="bg-gradient-to-r from-orange-500 to-yellow-600 hover:from-orange-600 hover:to-yellow-700 text-white px-8 py-4 text-lg font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                  className="bg-gradient-to-r from-orange-500 to-yellow-600 hover:from-orange-600 hover:to-yellow-700 text-white px-6 py-4 text-base font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 w-full"
                   disabled={timeActionMutation.isPending || user.status !== 'working'}
                 >
                   {user.status !== 'working' ? 'Сначала начните работу' : 'Начать перерыв'}
@@ -351,7 +351,7 @@ const Dashboard = () => {
             </Card>
 
             <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-              <CardContent className="text-center py-12">
+              <CardContent className="text-center py-8 px-4">
                 <div className="w-20 h-20 bg-gradient-to-r from-red-400 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Clock className="w-10 h-10 text-white" />
                 </div>
@@ -364,7 +364,7 @@ const Dashboard = () => {
                 <Button
                   onClick={handleEndWork}
                   size="lg"
-                  className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white px-8 py-4 text-lg font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                  className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white px-6 py-4 text-base font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 w-full"
                   disabled={timeActionMutation.isPending || user.status === 'offline'}
                 >
                   {user.status === 'offline' ? 'День завершен' : 'Завершить день'}

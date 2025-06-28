@@ -36,6 +36,10 @@ const Login = () => {
     try {
       const response = await loginMutation.mutateAsync({ email, password });
       
+      // Сохранить токен и данные пользователя в localStorage
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      
       // Add default status to user object to match User interface
       const userWithStatus = {
         ...response.user,
@@ -44,6 +48,8 @@ const Login = () => {
       
       setUser(userWithStatus);
       setToken(response.token);
+      
+      console.log('Login successful, user role:', response.user.role);
       
       // Редирект в зависимости от роли
       if (response.user.role === 'admin') {

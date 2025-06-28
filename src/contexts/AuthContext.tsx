@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 interface User {
@@ -36,6 +35,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setToken(storedToken);
         setUser(JSON.parse(userData));
       } catch (error) {
+        console.error('Error parsing stored user data:', error);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
@@ -48,6 +48,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     localStorage.removeItem('user');
     setUser(null);
     setToken(null);
+    console.log('User logged out, localStorage cleared');
   };
 
   const updateUserStatus = (status: 'working' | 'break' | 'offline', breakStartTime?: string) => {

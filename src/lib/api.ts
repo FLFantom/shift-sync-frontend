@@ -73,6 +73,22 @@ class ApiClient {
     };
   }
 
+  private async handleResponse(response: Response) {
+    if (response.status === 401) {
+      // Токен истек или невалидный
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return response;
+  }
+
   async login(data: LoginRequest): Promise<LoginResponse> {
     const response = await fetch(`${API_BASE_URL}/login`, {
       method: 'POST',
@@ -94,9 +110,7 @@ class ApiClient {
       body: JSON.stringify(data)
     });
 
-    if (!response.ok) {
-      throw new Error('Time action failed');
-    }
+    await this.handleResponse(response);
   }
 
   async reportLateness(data: LatenessReportRequest): Promise<void> {
@@ -106,9 +120,7 @@ class ApiClient {
       body: JSON.stringify(data)
     });
 
-    if (!response.ok) {
-      throw new Error('Lateness report failed');
-    }
+    await this.handleResponse(response);
   }
 
   async notifyBreakExceeded(data: BreakExceededRequest): Promise<void> {
@@ -118,9 +130,7 @@ class ApiClient {
       body: JSON.stringify(data)
     });
 
-    if (!response.ok) {
-      throw new Error('Break exceeded notification failed');
-    }
+    await this.handleResponse(response);
   }
 
   async getAllUsers(): Promise<ApiUser[]> {
@@ -129,11 +139,8 @@ class ApiClient {
       headers: this.getAuthHeaders()
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch users');
-    }
-
-    return response.json();
+    const handledResponse = await this.handleResponse(response);
+    return handledResponse.json();
   }
 
   async updateUser(userId: string, data: UpdateUserRequest): Promise<void> {
@@ -143,9 +150,7 @@ class ApiClient {
       body: JSON.stringify(data)
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to update user');
-    }
+    await this.handleResponse(response);
   }
 
   async deleteUser(userId: string): Promise<void> {
@@ -154,9 +159,7 @@ class ApiClient {
       headers: this.getAuthHeaders()
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to delete user');
-    }
+    await this.handleResponse(response);
   }
 
   async getUserLogs(userId: string): Promise<UserLog[]> {
@@ -165,11 +168,8 @@ class ApiClient {
       headers: this.getAuthHeaders()
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch user logs');
-    }
-
-    return response.json();
+    const handledResponse = await this.handleResponse(response);
+    return handledResponse.json();
   }
 }
 
