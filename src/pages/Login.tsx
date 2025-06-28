@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -36,12 +35,31 @@ const Login = () => {
     try {
       const response = await loginMutation.mutateAsync({ email, password });
       
-      // Правильно извлекаем данные пользователя из вложенной структуры
-      const userData = response.data?.user || response.user;
-      const token = response.token || 'mock-token'; // fallback для токена
-      
       console.log('Login response:', response);
+      
+      // Правильно извлекаем данные из API ответа
+      let userData, token;
+      
+      if (response.success && response.data) {
+        // Формат: { success: true, data: { user: {...}, token: "..." } }
+        userData = response.data.user;
+        token = response.data.token || response.token;
+      } else if (response.data && response.data.user) {
+        // Альтернативный формат: { data: { success: true, user: {...} }, token: "..." }
+        userData = response.data.user;
+        token = response.token;
+      } else {
+        // Прямой формат: { user: {...}, token: "..." }
+        userData = response.user;
+        token = response.token;
+      }
+      
       console.log('Extracted user data:', userData);
+      console.log('Extracted token:', token);
+      
+      if (!userData || !userData.id) {
+        throw new Error('Invalid user data received');
+      }
       
       // Сохранить токен и данные пользователя в localStorage
       localStorage.setItem('token', token);

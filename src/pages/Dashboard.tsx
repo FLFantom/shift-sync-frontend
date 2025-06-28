@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTimeAction, useReportLateness, useNotifyBreakExceeded } from '../hooks/useTimeActions';
@@ -137,10 +138,10 @@ const Dashboard = () => {
       
       console.log('Sending start_work with userId:', user.id);
       
-      // Шаг 1: Фиксация времени с userId
+      // Правильно передаем userId согласно API документации
       await timeActionMutation.mutateAsync({ 
         action: 'start_work',
-        userId: user.id
+        userId: parseInt(user.id)
       });
       
       // Обновляем статус локально
@@ -188,9 +189,10 @@ const Dashboard = () => {
     try {
       console.log('Sending start_break with userId:', user.id);
       
+      // Правильно передаем userId согласно API документации
       await timeActionMutation.mutateAsync({ 
         action: 'start_break',
-        userId: user.id
+        userId: parseInt(user.id)
       });
       updateUserStatus('break');
       toast({
@@ -213,9 +215,10 @@ const Dashboard = () => {
       
       console.log('Sending end_break with userId:', user.id, 'and breakDuration:', breakDurationMinutes);
       
+      // Правильно передаем userId и breakDuration согласно API документации
       await timeActionMutation.mutateAsync({ 
         action: 'end_break',
-        userId: user.id,
+        userId: parseInt(user.id),
         breakDuration: breakDurationMinutes
       });
       
@@ -250,9 +253,10 @@ const Dashboard = () => {
     try {
       console.log('Sending end_work with userId:', user.id);
       
+      // Правильно передаем userId согласно API документации
       await timeActionMutation.mutateAsync({ 
         action: 'end_work',
-        userId: user.id
+        userId: parseInt(user.id)
       });
       updateUserStatus('offline');
       toast({

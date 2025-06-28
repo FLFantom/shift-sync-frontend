@@ -1,3 +1,4 @@
+
 const API_BASE_URL = 'https://gelding-able-sailfish.ngrok-free.app/webhook';
 
 export interface LoginRequest {
@@ -17,7 +18,7 @@ export interface LoginResponse {
 
 export interface TimeActionRequest {
   action: 'start_work' | 'start_break' | 'end_break' | 'end_work';
-  userId?: string;
+  userId: number;
   breakDuration?: number;
 }
 
@@ -109,6 +110,7 @@ class ApiClient {
   }
 
   async timeAction(data: TimeActionRequest): Promise<void> {
+    console.log('Sending time action with data:', data);
     const response = await fetch(`${API_BASE_URL}/time-action`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
