@@ -1,6 +1,6 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient, UpdateUserRequest } from '@/lib/api';
+import { apiClient } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 
 export const useGetAllUsers = () => {
@@ -15,7 +15,7 @@ export const useUpdateUser = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ userId, data }: { userId: string; data: UpdateUserRequest }) => 
+    mutationFn: ({ userId, data }: { userId: string; data: { name: string; role: string } }) => 
       apiClient.updateUser(userId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });

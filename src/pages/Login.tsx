@@ -1,20 +1,23 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useLogin } from '../hooks/useAuth';
+import { apiClient } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Mail, Lock, Smartphone } from 'lucide-react';
+import { Clock, Mail, Lock, Smartphone, AlertCircle } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const { setUser, setToken } = useAuth();
   const navigate = useNavigate();
-  const loginMutation = useLogin();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -31,59 +34,40 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
     
     try {
-      const response = await loginMutation.mutateAsync({ email, password });
+      const response = await apiClient.login({ email, password });
       
-      console.log('Login response:', response);
-      
-      // Правильно извлекаем данные из API ответа
-      let userData, token;
-      
-      if (response.success && response.data) {
-        // Формат: { success: true, data: { user: {...}, token: "..." } }
-        userData = response.data.user;
-        token = response.data.token || response.token;
-      } else if (response.data && response.data.user) {
-        // Альтернативный формат: { data: { success: true, user: {...} }, token: "..." }
-        userData = response.data.user;
-        token = response.token;
+      if (response.success) {
+        setUser(response.user);
+        setToken(response.token);
+        
+        // Редирект в зависимости от роли
+        if (response.user.role === 'admin') {
+          navigate('/admin-panel');
+        } else {
+          navigate('/dashboard');
+        }
+        
+        toast({
+          title: "Успешный вход",
+          description: `Добро пожаловать, ${response.user.name}!`,
+        });
       } else {
-        // Прямой формат: { user: {...}, token: "..." }
-        userData = response.user;
-        token = response.token;
+        setError(response.message || 'Ошибка при входе в систему');
       }
-      
-      console.log('Extracted user data:', userData);
-      console.log('Extracted token:', token);
-      
-      if (!userData || !userData.id) {
-        throw new Error('Invalid user data received');
-      }
-      
-      // Сохранить токен и данные пользователя в localStorage
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(userData));
-      
-      // Add default status to user object to match User interface
-      const userWithStatus = {
-        ...userData,
-        status: 'offline' as const
-      };
-      
-      setUser(userWithStatus);
-      setToken(token);
-      
-      console.log('Login successful, user role:', userData.role);
-      
-      // Редирект в зависимости от роли
-      if (userData.role === 'admin') {
-        navigate('/admin-panel');
-      } else {
-        navigate('/dashboard');
-      }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
+      setError(error.message || 'Произошла ошибка при входе в систему');
+      toast({
+        title: "Ошибка входа",
+        description: error.message || "Неверный email или пароль",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -114,15 +98,6 @@ const Login = () => {
                 Пожалуйста, используйте компьютер или ноутбук для входа в систему
               </p>
             </div>
-            
-            <div className="text-sm text-gray-500">
-              <p>Для работы с системой требуется:</p>
-              <ul className="mt-2 space-y-1">
-                <li>• Компьютер или ноутбук</li>
-                <li>• Браузер Chrome, Firefox или Safari</li>
-                <li>• Стабильное интернет-соединение</li>
-              </ul>
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -148,6 +123,13 @@ const Login = () => {
         
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 text-red-600" />
+                <span className="text-red-700 text-sm">{error}</span>
+              </div>
+            )}
+            
             <div className="space-y-2">
               <Label htmlFor="email" className="text-gray-700 font-medium">Email</Label>
               <div className="relative">
@@ -183,9 +165,9 @@ const Login = () => {
             <Button
               type="submit"
               className="w-full h-12 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-              disabled={loginMutation.isPending}
+              disabled={loading}
             >
-              {loginMutation.isPending ? (
+              {loading ? (
                 <div className="flex items-center space-x-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   <span>Вход...</span>

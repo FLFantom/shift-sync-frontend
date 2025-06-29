@@ -1,13 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'user' | 'admin';
-  status: 'working' | 'break' | 'offline';
-  breakStartTime?: string;
-}
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { User } from '../lib/api';
 
 interface AuthContextType {
   user: User | null;
@@ -32,8 +25,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     
     if (storedToken && userData) {
       try {
+        const parsedUser = JSON.parse(userData);
         setToken(storedToken);
-        setUser(JSON.parse(userData));
+        setUser(parsedUser);
       } catch (error) {
         console.error('Error parsing stored user data:', error);
         localStorage.removeItem('token');
@@ -51,34 +45,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     console.log('User logged out, localStorage cleared');
   };
 
-  const updateUserStatus = (status: 'working' | 'break' | 'offline', breakStartTime?: string) => {
+  const updateUserStatus = (status: 'working' | 'break' | 'offline') => {
     if (user) {
-      let newBreakStartTime;
-      
-      if (status === 'break') {
-        if (user.breakStartTime) {
-          const existingBreakDate = new Date(user.breakStartTime);
-          const currentDate = new Date();
-          
-          const isSameDay = existingBreakDate.getFullYear() === currentDate.getFullYear() &&
-                           existingBreakDate.getMonth() === currentDate.getMonth() &&
-                           existingBreakDate.getDate() === currentDate.getDate();
-          
-          if (isSameDay) {
-            newBreakStartTime = user.breakStartTime;
-          } else {
-            newBreakStartTime = breakStartTime || new Date().toISOString();
-          }
-        } else {
-          newBreakStartTime = breakStartTime || new Date().toISOString();
-        }
-      }
-      
-      const updatedUser = { 
-        ...user, 
-        status, 
-        breakStartTime: status === 'break' ? newBreakStartTime : user.breakStartTime
-      };
+      const updatedUser = { ...user, status };
       setUser(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
     }

@@ -7,10 +7,12 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
+  success: boolean;
+  message: string;
   user: {
-    id: string;
-    name: string;
+    id: number;
     email: string;
+    name: string;
     role: 'user' | 'admin';
   };
   token: string;
@@ -18,37 +20,15 @@ export interface LoginResponse {
 
 export interface TimeActionRequest {
   action: 'start_work' | 'start_break' | 'end_break' | 'end_work';
-  userId: number;
-  breakDuration?: number;
+  break_duration?: number;
 }
 
-export interface LatenessReportRequest {
-  userId: string;
-  userName: string;
-  userEmail: string;
-  startTime: string;
-  lateMinutes: number;
-}
-
-export interface BreakExceededRequest {
-  userId: string;
-  userName: string;
-  userEmail: string;
-  breakDurationMinutes: number;
-}
-
-export interface UpdateUserRequest {
-  name: string;
-  role: 'user' | 'admin';
-}
-
-export interface ApiUser {
-  id: string;
-  name: string;
+export interface User {
+  id: number;
   email: string;
+  name: string;
   role: 'user' | 'admin';
-  status: 'working' | 'break' | 'offline';
-  breakStartTime?: string;
+  status?: 'working' | 'break' | 'offline';
 }
 
 export interface UserLog {
@@ -68,13 +48,6 @@ class ApiClient {
     };
   }
 
-  private getBasicHeaders() {
-    return {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true'
-    };
-  }
-
   private async handleResponse(response: Response) {
     if (response.status === 401) {
       // Токен истек или невалидный
@@ -85,88 +58,75 @@ class ApiClient {
     }
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const error = await response.text();
+      throw new Error(`HTTP error! status: ${response.status}, message: ${error}`);
     }
     
-    return response;
+    return response.json();
   }
 
-  async login(data: LoginRequest): Promise<any> {
+  async login(data: LoginRequest): Promise<LoginResponse> {
     const response = await fetch(`${API_BASE_URL}/login`, {
       method: 'POST',
-      headers: this.getBasicHeaders(),
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
+      },
       body: JSON.stringify(data)
     });
 
-    if (!response.ok) {
-      throw new Error('Login failed');
-    }
-
     const result = await response.json();
-    console.log('Raw API response:', result);
     
-    // Возвращаем весь ответ, чтобы Login.tsx мог правильно его обработать
+    if (!response.ok) {
+      throw new Error(result.error || 'Login failed');
+    }
+    
+    if (result.success) {
+      // Сохранить токен и пользователя
+      localStorage.setItem('token', result.token);
+      localStorage.setItem('user', JSON.stringify(result.user));
+    }
+    
     return result;
   }
 
-  async timeAction(data: TimeActionRequest): Promise<void> {
-    console.log('Sending time action with data:', data);
+  async timeAction(data: TimeActionRequest) {
     const response = await fetch(`${API_BASE_URL}/time-action`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(data)
     });
 
-    await this.handleResponse(response);
+    return this.handleResponse(response);
   }
 
-  async reportLateness(data: LatenessReportRequest): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/lateness-report`, {
-      method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(data)
-    });
-
-    await this.handleResponse(response);
-  }
-
-  async notifyBreakExceeded(data: BreakExceededRequest): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/notify-break-exceeded`, {
-      method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(data)
-    });
-
-    await this.handleResponse(response);
-  }
-
-  async getAllUsers(): Promise<ApiUser[]> {
+  async getAllUsers(): Promise<User[]> {
     const response = await fetch(`${API_BASE_URL}/admin/users`, {
       method: 'GET',
       headers: this.getAuthHeaders()
     });
 
-    const handledResponse = await this.handleResponse(response);
-    return handledResponse.json();
+    const result = await this.handleResponse(response);
+    return result.success ? result.data : [];
   }
 
-  async updateUser(userId: string, data: UpdateUserRequest): Promise<void> {
+  async updateUser(userId: string, data: { name: string; role: string }) {
     const response = await fetch(`${API_BASE_URL}/admin/user/${userId}`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(data)
     });
 
-    await this.handleResponse(response);
+    return this.handleResponse(response);
   }
 
-  async deleteUser(userId: string): Promise<void> {
+  async deleteUser(userId: string) {
     const response = await fetch(`${API_BASE_URL}/admin/user/${userId}`, {
       method: 'DELETE',
       headers: this.getAuthHeaders()
     });
 
-    await this.handleResponse(response);
+    return this.handleResponse(response);
   }
 
   async getUserLogs(userId: string): Promise<UserLog[]> {
@@ -175,8 +135,34 @@ class ApiClient {
       headers: this.getAuthHeaders()
     });
 
-    const handledResponse = await this.handleResponse(response);
-    return handledResponse.json();
+    const result = await this.handleResponse(response);
+    return result.success ? result.data : [];
+  }
+
+  async notifyBreakExceeded(data: { userName: string; breakDurationMinutes: number }) {
+    const response = await fetch(`${API_BASE_URL}/notify-break-exceeded`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+
+    return this.handleResponse(response);
+  }
+
+  async reportLateness(data: { userName: string; startTime: string }) {
+    const response = await fetch(`${API_BASE_URL}/lateness-report`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+
+    return this.handleResponse(response);
+  }
+
+  logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/login';
   }
 }
 

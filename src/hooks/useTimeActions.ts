@@ -1,6 +1,6 @@
 
 import { useMutation } from '@tanstack/react-query';
-import { apiClient, TimeActionRequest, LatenessReportRequest, BreakExceededRequest } from '@/lib/api';
+import { apiClient, TimeActionRequest } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 
 export const useTimeAction = () => {
@@ -18,7 +18,7 @@ export const useTimeAction = () => {
 
 export const useReportLateness = () => {
   return useMutation({
-    mutationFn: (data: LatenessReportRequest) => apiClient.reportLateness(data),
+    mutationFn: (data: { userName: string; startTime: string }) => apiClient.reportLateness(data),
     onError: (error) => {
       console.error('Lateness report error:', error);
     }
@@ -27,7 +27,7 @@ export const useReportLateness = () => {
 
 export const useNotifyBreakExceeded = () => {
   return useMutation({
-    mutationFn: (data: BreakExceededRequest) => apiClient.notifyBreakExceeded(data),
+    mutationFn: (data: { userName: string; breakDurationMinutes: number }) => apiClient.notifyBreakExceeded(data),
     onError: (error) => {
       console.error('Break exceeded notification error:', error);
     }
