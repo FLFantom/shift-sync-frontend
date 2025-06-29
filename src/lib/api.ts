@@ -8,16 +8,14 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   success: boolean;
-  data?: {
-    success: boolean;
-    user: {
-      id: number;
-      email: string;
-      name: string;
-      role: 'user' | 'admin';
-    };
-    token: string;
+  message?: string;
+  user?: {
+    id: number;
+    email: string;
+    name: string;
+    role: 'user' | 'admin';
   };
+  token?: string;
   error?: string;
 }
 
@@ -86,10 +84,12 @@ class ApiClient {
       throw new Error(result.error || 'Login failed');
     }
     
-    if (result.success) {
-      // Сохранить токен и пользователя
-      localStorage.setItem('token', result.data.token);
-      localStorage.setItem('user', JSON.stringify(result.data.user));
+    if (result.success && result.token) {
+      // Store token and user data directly from result, not result.data
+      localStorage.setItem('token', result.token);
+      if (result.user) {
+        localStorage.setItem('user', JSON.stringify(result.user));
+      }
     }
     
     return result;
