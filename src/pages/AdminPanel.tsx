@@ -218,7 +218,12 @@ const AdminPanel = () => {
                             userName={employee.name}
                           />
                           <UserDialog 
-                            user={employee}
+                            user={{
+                              id: employee.id.toString(),
+                              name: employee.name,
+                              email: employee.email,
+                              role: employee.role
+                            }}
                             onSave={(userData) => handleUpdateUser(userData, employee.id)}
                           />
                           {employee.id !== user.id && (
