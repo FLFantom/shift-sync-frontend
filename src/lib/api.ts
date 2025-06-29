@@ -1,4 +1,3 @@
-
 const API_BASE_URL = 'https://gelding-able-sailfish.ngrok-free.app/webhook';
 
 export interface LoginRequest {
@@ -65,7 +64,18 @@ class ApiClient {
       throw new Error(`HTTP error! status: ${response.status}, message: ${error}`);
     }
     
-    return response.json();
+    // Проверяем, есть ли содержимое для парсинга
+    const text = await response.text();
+    if (!text) {
+      return { success: true };
+    }
+    
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      console.error('Failed to parse JSON:', text);
+      throw new Error('Invalid JSON response');
+    }
   }
 
   async login(data: LoginRequest): Promise<LoginResponse> {
@@ -96,6 +106,7 @@ class ApiClient {
   }
 
   async timeAction(data: TimeActionRequest) {
+    console.log('Sending time action request:', data);
     const response = await fetch(`${API_BASE_URL}/time-action`, {
       method: 'POST',
       headers: this.getAuthHeaders(),

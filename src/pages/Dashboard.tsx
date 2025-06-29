@@ -167,6 +167,11 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Start work error:', error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось начать рабочий день",
+        variant: "destructive",
+      });
     }
   };
 
@@ -190,6 +195,11 @@ const Dashboard = () => {
       });
     } catch (error) {
       console.error('Start break error:', error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось начать перерыв",
+        variant: "destructive",
+      });
     }
   };
 
@@ -226,6 +236,11 @@ const Dashboard = () => {
       });
     } catch (error) {
       console.error('End break error:', error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось завершить перерыв",
+        variant: "destructive",
+      });
     }
   };
 
@@ -249,6 +264,11 @@ const Dashboard = () => {
       });
     } catch (error) {
       console.error('End work error:', error);
+      toast({
+        title: "Ошибка",
+        description: "Не удалось завершить рабочий день",
+        variant: "destructive",
+      });
     }
   };
 
