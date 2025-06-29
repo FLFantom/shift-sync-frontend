@@ -1,3 +1,4 @@
+
 const API_BASE_URL = 'https://gelding-able-sailfish.ngrok-free.app/webhook';
 
 export interface LoginRequest {
@@ -19,7 +20,6 @@ export interface LoginResponse {
 }
 
 export interface TimeActionRequest {
-  userId: number;
   action: 'start_work' | 'start_break' | 'end_break' | 'end_work';
   breakDuration?: number;
 }
@@ -40,9 +40,32 @@ export interface UserLog {
   details?: string;
 }
 
+// Custom error types
+class AuthError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
+class ValidationError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
 class ApiClient {
+  private getToken() {
+    const tokenData = localStorage.getItem('token');
+    if (!tokenData) return null;
+    
+    // В будущем можно добавить проверку срока действия токена
+    return tokenData;
+  }
+
   private getAuthHeaders() {
-    const token = localStorage.getItem('token');
+    const token = this.getToken();
     return {
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true',
@@ -51,12 +74,20 @@ class ApiClient {
   }
 
   private async handleResponse(response: Response) {
-    if (response.status === 401) {
-      // Токен истек или невалидный
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
-      throw new Error('Unauthorized');
+    // Специальная обработка статусов ошибок
+    switch (response.status) {
+      case 401:
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+        throw new AuthError('Session expired', 401);
+      case 403:
+        throw new AuthError('Insufficient permissions', 403);
+      case 422:
+        const errorData = await response.json().catch(() => ({}));
+        throw new ValidationError(errorData.error?.message || 'Validation failed', 422);
+      case 500:
+        throw new Error('Server error occurred');
     }
     
     if (!response.ok) {
@@ -84,6 +115,7 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': 'true'
+        // НЕ добавляем Authorization header для логина
       },
       body: JSON.stringify(data)
     });
@@ -94,23 +126,36 @@ class ApiClient {
       throw new Error(result.error || 'Login failed');
     }
     
-    if (result.success && result.token) {
-      // Store token and user data directly from result, not result.data
-      localStorage.setItem('token', result.token);
-      if (result.user) {
-        localStorage.setItem('user', JSON.stringify(result.user));
-      }
+    // Валидация структуры ответа
+    if (!result.success || !result.token || !result.user) {
+      throw new Error('Invalid login response format');
     }
+    
+    // Сохраняем токен и данные пользователя
+    localStorage.setItem('token', result.token);
+    localStorage.setItem('user', JSON.stringify(result.user));
     
     return result;
   }
 
   async timeAction(data: TimeActionRequest) {
     console.log('Sending time action request:', data);
+    
+    // КРИТИЧЕСКИ ВАЖНО: НЕ передаем userId в теле запроса
+    // userId извлекается из JWT токена на сервере
+    const requestBody = {
+      action: data.action
+    };
+    
+    // Добавляем breakDuration только для действий с перерывом
+    if (data.breakDuration && (data.action === 'end_break' || data.action === 'start_break')) {
+      requestBody.break_duration = data.breakDuration;
+    }
+    
     const response = await fetch(`${API_BASE_URL}/time-action`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify(data)
+      body: JSON.stringify(requestBody)
     });
 
     return this.handleResponse(response);
@@ -123,7 +168,17 @@ class ApiClient {
     });
 
     const result = await this.handleResponse(response);
-    return result.success ? result.data : [];
+    
+    // Обработка разных форматов ответа
+    if (Array.isArray(result)) {
+      return result;
+    } else if (result.data && Array.isArray(result.data)) {
+      return result.data;
+    } else if (result.success && result.data) {
+      return result.data;
+    }
+    
+    return [];
   }
 
   async updateUser(userId: number, data: { name: string; role: string }) {
@@ -152,7 +207,17 @@ class ApiClient {
     });
 
     const result = await this.handleResponse(response);
-    return result.success ? result.data : [];
+    
+    // Обработка разных форматов ответа
+    if (Array.isArray(result)) {
+      return result;
+    } else if (result.data && Array.isArray(result.data)) {
+      return result.data;
+    } else if (result.success && result.data) {
+      return result.data;
+    }
+    
+    return [];
   }
 
   async notifyBreakExceeded(data: { userId: number; userName: string; userEmail: string; breakDurationMinutes: number }) {

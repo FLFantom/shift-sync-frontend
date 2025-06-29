@@ -130,11 +130,11 @@ const Dashboard = () => {
     try {
       const startTime = new Date();
       
-      console.log('Sending start_work with userId:', user.id);
+      console.log('Sending start_work action');
       
+      // КРИТИЧЕСКИ ВАЖНО: НЕ передаем userId - он извлекается из JWT токена
       await timeActionMutation.mutateAsync({ 
-        action: 'start_work',
-        userId: user.id
+        action: 'start_work'
       });
       
       updateUserStatus('working');
@@ -182,11 +182,11 @@ const Dashboard = () => {
     }
 
     try {
-      console.log('Sending start_break with userId:', user.id);
+      console.log('Sending start_break action');
       
+      // НЕ передаем userId - он извлекается из JWT токена
       await timeActionMutation.mutateAsync({ 
-        action: 'start_break',
-        userId: user.id
+        action: 'start_break'
       });
       updateUserStatus('break');
       toast({
@@ -212,11 +212,11 @@ const Dashboard = () => {
     try {
       const breakDurationMinutes = calculateBreakDurationInMinutes();
       
-      console.log('Sending end_break with userId:', user.id, 'and breakDuration:', breakDurationMinutes);
+      console.log('Sending end_break action with breakDuration:', breakDurationMinutes);
       
+      // НЕ передаем userId - он извлекается из JWT токена
       await timeActionMutation.mutateAsync({ 
         action: 'end_break',
-        userId: user.id,
         breakDuration: breakDurationMinutes
       });
       
@@ -251,11 +251,11 @@ const Dashboard = () => {
     }
 
     try {
-      console.log('Sending end_work with userId:', user.id);
+      console.log('Sending end_work action');
       
+      // НЕ передаем userId - он извлекается из JWT токена
       await timeActionMutation.mutateAsync({ 
-        action: 'end_work',
-        userId: user.id
+        action: 'end_work'
       });
       updateUserStatus('offline');
       toast({
