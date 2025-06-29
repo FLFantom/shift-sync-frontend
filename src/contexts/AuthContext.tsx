@@ -45,11 +45,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     console.log('User logged out, localStorage cleared');
   };
 
-  const updateUserStatus = (status: 'working' | 'break' | 'offline') => {
+  const updateUserStatus = (status: 'working' | 'break' | 'offline', breakStartTime?: string) => {
     if (user) {
-      const updatedUser = { ...user, status };
+      const updatedUser = { 
+        ...user, 
+        status,
+        breakStartTime: status === 'break' ? (breakStartTime || new Date().toISOString()) : undefined
+      };
       setUser(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
+      console.log('User status updated:', updatedUser);
     }
   };
 

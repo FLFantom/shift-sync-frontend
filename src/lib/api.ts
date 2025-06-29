@@ -60,7 +60,6 @@ class ApiClient {
     const tokenData = localStorage.getItem('token');
     if (!tokenData) return null;
     
-    // В будущем можно добавить проверку срока действия токена
     return tokenData;
   }
 
@@ -74,6 +73,8 @@ class ApiClient {
   }
 
   private async handleResponse(response: Response) {
+    console.log('API Response status:', response.status);
+    
     // Специальная обработка статусов ошибок
     switch (response.status) {
       case 401:
@@ -97,34 +98,51 @@ class ApiClient {
     
     // Проверяем, есть ли содержимое для парсинга
     const text = await response.text();
+    console.log('Raw response:', text);
+    
     if (!text) {
       return { success: true };
     }
     
     try {
-      return JSON.parse(text);
-    } catch (error) {
+      const jsonData = JSON.parse(text);
+      console.log('Parsed response:', jsonData);
+      
+      // Обработка ответов n8n в формате {success: true, data: {...}}
+      if (jsonData.success && jsonData.data) {
+        return jsonData.data;
+      }
+      
+      // Если это прямой успешный ответ (login, register)
+      if (jsonData.success) {
+        return jsonData;
+      }
+      
+      // Обработка ошибок n8n
+      if (jsonData.success === false && jsonData.error) {
+        throw new Error(jsonData.error);
+      }
+      
+      return jsonData;
+    } catch (parseError) {
       console.error('Failed to parse JSON:', text);
       throw new Error('Invalid JSON response');
     }
   }
 
   async login(data: LoginRequest): Promise<LoginResponse> {
+    console.log('Login request:', data);
+    
     const response = await fetch(`${API_BASE_URL}/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': 'true'
-        // НЕ добавляем Authorization header для логина
       },
       body: JSON.stringify(data)
     });
 
-    const result = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(result.error || 'Login failed');
-    }
+    const result = await this.handleResponse(response);
     
     // Валидация структуры ответа
     if (!result.success || !result.token || !result.user) {
@@ -141,14 +159,13 @@ class ApiClient {
   async timeAction(data: TimeActionRequest) {
     console.log('Sending time action request:', data);
     
-    // КРИТИЧЕСКИ ВАЖНО: НЕ передаем userId в теле запроса
-    // userId извлекается из JWT токена на сервере
+    // n8n ожидает userid в теле запроса (извлекается из JWT)
     const requestBody: any = {
       action: data.action
     };
     
     // Добавляем breakDuration только для действий с перерывом
-    if (data.breakDuration && (data.action === 'end_break' || data.action === 'start_break')) {
+    if (data.breakDuration !== undefined && (data.action === 'end_break' || data.action === 'start_break')) {
       requestBody.break_duration = data.breakDuration;
     }
     
@@ -169,13 +186,9 @@ class ApiClient {
 
     const result = await this.handleResponse(response);
     
-    // Обработка разных форматов ответа
+    // n8n возвращает прямой массив пользователей после обработки
     if (Array.isArray(result)) {
       return result;
-    } else if (result.data && Array.isArray(result.data)) {
-      return result.data;
-    } else if (result.success && result.data) {
-      return result.data;
     }
     
     return [];
@@ -208,13 +221,9 @@ class ApiClient {
 
     const result = await this.handleResponse(response);
     
-    // Обработка разных форматов ответа
+    // n8n возвращает прямой массив логов после обработки
     if (Array.isArray(result)) {
       return result;
-    } else if (result.data && Array.isArray(result.data)) {
-      return result.data;
-    } else if (result.success && result.data) {
-      return result.data;
     }
     
     return [];

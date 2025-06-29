@@ -28,6 +28,8 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
+    console.log('User status changed:', user?.status, 'Break start:', user?.breakStartTime);
+    
     if (breakIntervalRef.current) {
       clearInterval(breakIntervalRef.current);
       breakIntervalRef.current = null;
@@ -46,7 +48,8 @@ const Dashboard = () => {
         const isOvertime = diff > 3600;
         const sign = isOvertime ? '-' : '';
         
-        setBreakDuration(`${sign}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+        const durationString = `${sign}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        setBreakDuration(durationString);
         
         const totalBreakMinutes = Math.floor(diff / 60);
         if (totalBreakMinutes > 60 && !breakExceededNotifiedRef.current && user) {
@@ -62,9 +65,11 @@ const Dashboard = () => {
 
       updateBreakDuration();
       breakIntervalRef.current = setInterval(updateBreakDuration, 1000);
+      console.log('Break timer started');
     } else {
       setBreakDuration('');
       breakExceededNotifiedRef.current = false;
+      console.log('Break timer stopped');
     }
 
     return () => {
@@ -132,7 +137,6 @@ const Dashboard = () => {
       
       console.log('Sending start_work action');
       
-      // КРИТИЧЕСКИ ВАЖНО: НЕ передаем userId - он извлекается из JWT токена
       await timeActionMutation.mutateAsync({ 
         action: 'start_work'
       });
@@ -184,11 +188,13 @@ const Dashboard = () => {
     try {
       console.log('Sending start_break action');
       
-      // НЕ передаем userId - он извлекается из JWT токена
       await timeActionMutation.mutateAsync({ 
         action: 'start_break'
       });
-      updateUserStatus('break');
+      
+      const breakStartTime = new Date().toISOString();
+      updateUserStatus('break', breakStartTime);
+      
       toast({
         title: "Перерыв начат",
         description: "Отдыхайте, но не забывайте о времени!",
@@ -214,7 +220,6 @@ const Dashboard = () => {
       
       console.log('Sending end_break action with breakDuration:', breakDurationMinutes);
       
-      // НЕ передаем userId - он извлекается из JWT токена
       await timeActionMutation.mutateAsync({ 
         action: 'end_break',
         breakDuration: breakDurationMinutes
@@ -253,7 +258,6 @@ const Dashboard = () => {
     try {
       console.log('Sending end_work action');
       
-      // НЕ передаем userId - он извлекается из JWT токена
       await timeActionMutation.mutateAsync({ 
         action: 'end_work'
       });
