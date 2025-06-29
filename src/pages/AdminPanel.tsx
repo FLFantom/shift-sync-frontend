@@ -222,7 +222,9 @@ const AdminPanel = () => {
                               id: employee.id.toString(),
                               name: employee.name,
                               email: employee.email,
-                              role: employee.role
+                              role: employee.role,
+                              status: employee.status || 'offline',
+                              breakStartTime: employee.breakStartTime
                             }}
                             onSave={(userData) => handleUpdateUser(userData, employee.id)}
                           />
