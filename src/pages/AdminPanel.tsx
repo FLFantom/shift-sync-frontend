@@ -49,14 +49,14 @@ const AdminPanel = () => {
     );
   };
 
-  const handleUpdateUser = (userData: { name: string; email: string; role: 'user' | 'admin' }, userId: string) => {
+  const handleUpdateUser = (userData: { name: string; email: string; role: 'user' | 'admin' }, userId: number) => {
     updateUserMutation.mutate({
       userId,
       data: { name: userData.name, role: userData.role }
     });
   };
 
-  const handleDeleteUser = (employeeId: string) => {
+  const handleDeleteUser = (employeeId: number) => {
     deleteUserMutation.mutate(employeeId);
   };
 
@@ -199,7 +199,7 @@ const AdminPanel = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {getStatusBadge(employee.status)}
+                        {getStatusBadge(employee.status || 'offline')}
                       </TableCell>
                       <TableCell>
                         {employee.status === 'break' && employee.breakStartTime

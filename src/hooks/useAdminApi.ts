@@ -15,7 +15,7 @@ export const useUpdateUser = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ userId, data }: { userId: string; data: { name: string; role: string } }) => 
+    mutationFn: ({ userId, data }: { userId: number; data: { name: string; role: string } }) => 
       apiClient.updateUser(userId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
@@ -38,7 +38,7 @@ export const useDeleteUser = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (userId: string) => apiClient.deleteUser(userId),
+    mutationFn: (userId: number) => apiClient.deleteUser(userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
       toast({
@@ -57,7 +57,7 @@ export const useDeleteUser = () => {
   });
 };
 
-export const useGetUserLogs = (userId: string) => {
+export const useGetUserLogs = (userId: number) => {
   return useQuery({
     queryKey: ['admin', 'user', userId, 'logs'],
     queryFn: () => apiClient.getUserLogs(userId),

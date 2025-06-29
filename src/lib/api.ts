@@ -8,19 +8,23 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   success: boolean;
-  message: string;
-  user: {
-    id: number;
-    email: string;
-    name: string;
-    role: 'user' | 'admin';
+  data?: {
+    success: boolean;
+    user: {
+      id: number;
+      email: string;
+      name: string;
+      role: 'user' | 'admin';
+    };
+    token: string;
   };
-  token: string;
+  error?: string;
 }
 
 export interface TimeActionRequest {
+  userId: number;
   action: 'start_work' | 'start_break' | 'end_break' | 'end_work';
-  break_duration?: number;
+  breakDuration?: number;
 }
 
 export interface User {
@@ -29,6 +33,7 @@ export interface User {
   name: string;
   role: 'user' | 'admin';
   status?: 'working' | 'break' | 'offline';
+  breakStartTime?: string;
 }
 
 export interface UserLog {
@@ -83,8 +88,8 @@ class ApiClient {
     
     if (result.success) {
       // Сохранить токен и пользователя
-      localStorage.setItem('token', result.token);
-      localStorage.setItem('user', JSON.stringify(result.user));
+      localStorage.setItem('token', result.data.token);
+      localStorage.setItem('user', JSON.stringify(result.data.user));
     }
     
     return result;
@@ -110,7 +115,7 @@ class ApiClient {
     return result.success ? result.data : [];
   }
 
-  async updateUser(userId: string, data: { name: string; role: string }) {
+  async updateUser(userId: number, data: { name: string; role: string }) {
     const response = await fetch(`${API_BASE_URL}/admin/user/${userId}`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
@@ -120,7 +125,7 @@ class ApiClient {
     return this.handleResponse(response);
   }
 
-  async deleteUser(userId: string) {
+  async deleteUser(userId: number) {
     const response = await fetch(`${API_BASE_URL}/admin/user/${userId}`, {
       method: 'DELETE',
       headers: this.getAuthHeaders()
@@ -129,7 +134,7 @@ class ApiClient {
     return this.handleResponse(response);
   }
 
-  async getUserLogs(userId: string): Promise<UserLog[]> {
+  async getUserLogs(userId: number): Promise<UserLog[]> {
     const response = await fetch(`${API_BASE_URL}/admin/user/${userId}/logs`, {
       method: 'GET',
       headers: this.getAuthHeaders()
@@ -139,7 +144,7 @@ class ApiClient {
     return result.success ? result.data : [];
   }
 
-  async notifyBreakExceeded(data: { userName: string; breakDurationMinutes: number }) {
+  async notifyBreakExceeded(data: { userId: number; userName: string; userEmail: string; breakDurationMinutes: number }) {
     const response = await fetch(`${API_BASE_URL}/notify-break-exceeded`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
@@ -149,7 +154,7 @@ class ApiClient {
     return this.handleResponse(response);
   }
 
-  async reportLateness(data: { userName: string; startTime: string }) {
+  async reportLateness(data: { userId: number; userName: string; userEmail: string; startTime: string; lateMinutes: number }) {
     const response = await fetch(`${API_BASE_URL}/lateness-report`, {
       method: 'POST',
       headers: this.getAuthHeaders(),

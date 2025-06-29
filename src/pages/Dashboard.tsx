@@ -141,7 +141,7 @@ const Dashboard = () => {
       // Правильно передаем userId согласно API документации
       await timeActionMutation.mutateAsync({ 
         action: 'start_work',
-        userId: parseInt(user.id)
+        userId: user.id
       });
       
       // Обновляем статус локально
@@ -192,7 +192,7 @@ const Dashboard = () => {
       // Правильно передаем userId согласно API документации
       await timeActionMutation.mutateAsync({ 
         action: 'start_break',
-        userId: parseInt(user.id)
+        userId: user.id
       });
       updateUserStatus('break');
       toast({
@@ -218,7 +218,7 @@ const Dashboard = () => {
       // Правильно передаем userId и breakDuration согласно API документации
       await timeActionMutation.mutateAsync({ 
         action: 'end_break',
-        userId: parseInt(user.id),
+        userId: user.id,
         breakDuration: breakDurationMinutes
       });
       
@@ -256,7 +256,7 @@ const Dashboard = () => {
       // Правильно передаем userId согласно API документации
       await timeActionMutation.mutateAsync({ 
         action: 'end_work',
-        userId: parseInt(user.id)
+        userId: user.id
       });
       updateUserStatus('offline');
       toast({
