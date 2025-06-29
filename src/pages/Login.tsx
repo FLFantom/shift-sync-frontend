@@ -40,12 +40,12 @@ const Login = () => {
     try {
       const response = await apiClient.login({ email, password });
       
-      if (response.success) {
-        setUser(response.user);
-        setToken(response.token);
+      if (response.success && response.data) {
+        setUser(response.data.user);
+        setToken(response.data.token);
         
         // Редирект в зависимости от роли
-        if (response.user.role === 'admin') {
+        if (response.data.user.role === 'admin') {
           navigate('/admin-panel');
         } else {
           navigate('/dashboard');
@@ -53,10 +53,10 @@ const Login = () => {
         
         toast({
           title: "Успешный вход",
-          description: `Добро пожаловать, ${response.user.name}!`,
+          description: `Добро пожаловать, ${response.data.user.name}!`,
         });
       } else {
-        setError(response.message || 'Ошибка при входе в систему');
+        setError(response.error || 'Ошибка при входе в систему');
       }
     } catch (error: any) {
       console.error('Login error:', error);

@@ -18,7 +18,8 @@ export const useTimeAction = () => {
 
 export const useReportLateness = () => {
   return useMutation({
-    mutationFn: (data: { userName: string; startTime: string }) => apiClient.reportLateness(data),
+    mutationFn: (data: { userId: number; userName: string; userEmail: string; startTime: string; lateMinutes: number }) => 
+      apiClient.reportLateness(data),
     onError: (error) => {
       console.error('Lateness report error:', error);
     }
@@ -27,7 +28,8 @@ export const useReportLateness = () => {
 
 export const useNotifyBreakExceeded = () => {
   return useMutation({
-    mutationFn: (data: { userName: string; breakDurationMinutes: number }) => apiClient.notifyBreakExceeded(data),
+    mutationFn: (data: { userId: number; userName: string; userEmail: string; breakDurationMinutes: number }) => 
+      apiClient.notifyBreakExceeded(data),
     onError: (error) => {
       console.error('Break exceeded notification error:', error);
     }

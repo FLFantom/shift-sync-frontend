@@ -8,13 +8,13 @@ import { FileText, Loader2 } from 'lucide-react';
 import { useGetUserLogs } from '../hooks/useAdminApi';
 
 interface UserLogsDialogProps {
-  userId: string;
+  userId: number;
   userName: string;
 }
 
 const UserLogsDialog = ({ userId, userName }: UserLogsDialogProps) => {
   const [open, setOpen] = useState(false);
-  const { data: logs, isLoading, error } = useGetUserLogs(open ? userId : '');
+  const { data: logs, isLoading, error } = useGetUserLogs(open ? userId : 0);
 
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleString('ru-RU');

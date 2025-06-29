@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTimeAction, useReportLateness, useNotifyBreakExceeded } from '../hooks/useTimeActions';
@@ -29,7 +28,6 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    // Полностью очищаем предыдущий интервал
     if (breakIntervalRef.current) {
       clearInterval(breakIntervalRef.current);
       breakIntervalRef.current = null;
@@ -50,7 +48,6 @@ const Dashboard = () => {
         
         setBreakDuration(`${sign}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
         
-        // Проверка превышения лимита перерыва (60 минут)
         const totalBreakMinutes = Math.floor(diff / 60);
         if (totalBreakMinutes > 60 && !breakExceededNotifiedRef.current && user) {
           breakExceededNotifiedRef.current = true;
@@ -66,12 +63,10 @@ const Dashboard = () => {
       updateBreakDuration();
       breakIntervalRef.current = setInterval(updateBreakDuration, 1000);
     } else {
-      // Принудительно сбрасываем таймер и очищаем состояние когда пользователь не на перерыве
       setBreakDuration('');
       breakExceededNotifiedRef.current = false;
     }
 
-    // Cleanup function
     return () => {
       if (breakIntervalRef.current) {
         clearInterval(breakIntervalRef.current);
@@ -80,7 +75,6 @@ const Dashboard = () => {
     };
   }, [user?.status, user?.breakStartTime, user, notifyBreakExceededMutation]);
 
-  // Сброс флага уведомления о превышении в новый день
   useEffect(() => {
     if (user?.breakStartTime) {
       const breakStart = new Date(user.breakStartTime);
@@ -138,24 +132,20 @@ const Dashboard = () => {
       
       console.log('Sending start_work with userId:', user.id);
       
-      // Правильно передаем userId согласно API документации
       await timeActionMutation.mutateAsync({ 
         action: 'start_work',
         userId: user.id
       });
       
-      // Обновляем статус локально
       updateUserStatus('working');
       
-      // Шаг 2: Проверка на опоздание
       const workStartTime = startTime.getHours() * 3600 + startTime.getMinutes() * 60 + startTime.getSeconds();
-      const nineAM = 9 * 3600; // 9:00:00 в секундах
+      const nineAM = 9 * 3600;
       
       if (workStartTime > nineAM) {
         const lateSeconds = workStartTime - nineAM;
         const lateMinutes = Math.floor(lateSeconds / 60);
         
-        // Отправка уведомления об опоздании с userId
         reportLatenessMutation.mutate({
           userId: user.id,
           userName: user.name,
@@ -189,7 +179,6 @@ const Dashboard = () => {
     try {
       console.log('Sending start_break with userId:', user.id);
       
-      // Правильно передаем userId согласно API документации
       await timeActionMutation.mutateAsync({ 
         action: 'start_break',
         userId: user.id
@@ -215,24 +204,20 @@ const Dashboard = () => {
       
       console.log('Sending end_break with userId:', user.id, 'and breakDuration:', breakDurationMinutes);
       
-      // Правильно передаем userId и breakDuration согласно API документации
       await timeActionMutation.mutateAsync({ 
         action: 'end_break',
         userId: user.id,
         breakDuration: breakDurationMinutes
       });
       
-      // Немедленно останавливаем таймер и очищаем все состояния
       if (breakIntervalRef.current) {
         clearInterval(breakIntervalRef.current);
         breakIntervalRef.current = null;
       }
       
-      // Принудительно очищаем состояние таймера
       setBreakDuration('');
       breakExceededNotifiedRef.current = false;
       
-      // Обновляем статус пользователя ПОСЛЕ очистки таймера
       updateUserStatus('working');
       
       toast({
@@ -253,7 +238,6 @@ const Dashboard = () => {
     try {
       console.log('Sending end_work with userId:', user.id);
       
-      // Правильно передаем userId согласно API документации
       await timeActionMutation.mutateAsync({ 
         action: 'end_work',
         userId: user.id
