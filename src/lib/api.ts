@@ -143,7 +143,7 @@ class ApiClient {
     
     // КРИТИЧЕСКИ ВАЖНО: НЕ передаем userId в теле запроса
     // userId извлекается из JWT токена на сервере
-    const requestBody = {
+    const requestBody: any = {
       action: data.action
     };
     
