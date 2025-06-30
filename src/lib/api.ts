@@ -160,8 +160,7 @@ async getAllUsers(): Promise<User[]> {
     headers: this.getAuthHeaders(),
   });
 
-  // 🔥 Главное изменение ↓↓↓
-  if (!result || !Array.isArray(result.data)) {
+  if (!Array.isArray(result.data)) {
     console.error('[getAllUsers] Ошибка: API не вернул массив пользователей. Получено:', result);
     throw new Error('Сервер вернул некорректные данные (ожидался массив в result.data).');
   }
@@ -174,10 +173,9 @@ async getAllUsers(): Promise<User[]> {
     name: user.name,
     role: user.role,
     status: user.status || 'offline',
-    breakStartTime: user.breakStartTime,
+    breakStartTime: user.breakStartTime
   }));
 }
-
 
 
   async updateUser(userId: number, data: { name: string; role: string }): Promise<any> {
