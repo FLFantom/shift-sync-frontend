@@ -1,54 +1,36 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Users, Settings, ArrowLeft, LogIn, Edit, Trash2, Plus } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Users, Settings, ArrowLeft, LogIn, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
+import UserDialog from '../components/UserDialog';
 
-// Mock data for admin panel
-const mockEmployees = [
-  {
-    id: '1',
-    name: 'Иван Петров',
-    email: 'ivan@company.com',
-    status: 'offline' as const,
-    breakStartTime: null,
-    lastSeen: '2024-01-15 18:30'
-  },
-  {
-    id: '2',
-    name: 'Мария Сидорова', 
-    email: 'maria@company.com',
-    status: 'working' as const,
-    breakStartTime: null,
-    lastSeen: null
-  },
-  {
-    id: '3',
-    name: 'Александр Иванов',
-    email: 'alex@company.com', 
-    status: 'break' as const,
-    breakStartTime: new Date(Date.now() - 2700000).toISOString(), // 45 minutes ago
-    lastSeen: null
-  },
-  {
-    id: '4',
-    name: 'Елена Смирнова',
-    email: 'elena@company.com',
-    status: 'break' as const,
-    breakStartTime: new Date(Date.now() - 4500000).toISOString(), // 75 minutes ago
-    lastSeen: null
-  }
-];
+interface Employee {
+  id: string;
+  name: string;
+  email: string;
+  status: 'working' | 'break' | 'offline';
+  breakStartTime?: string;
+  role: 'user' | 'admin';
+}
 
 const AdminPanel = () => {
-  const { user } = useAuth();
+  const { user, loginAsUser, getAllUsers, updateUser, deleteUser, addUser } = useAuth();
   const navigate = useNavigate();
-  const [employees] = useState(mockEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      const users = getAllUsers();
+      setEmployees(users);
+    }
+  }, [user, getAllUsers]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -80,27 +62,79 @@ const AdminPanel = () => {
     );
   };
 
-  const handleLoginAsUser = (employeeName: string) => {
-    toast({
-      title: "Вход выполнен",
-      description: `Вы вошли как ${employeeName}`,
-    });
-    // In real app, this would switch user context
+  const handleLoginAsUser = (employeeId: string, employeeName: string) => {
+    const success = loginAsUser(employeeId);
+    if (success) {
+      toast({
+        title: "Вход выполнен",
+        description: `Вы вошли как ${employeeName}`,
+      });
+      navigate('/dashboard');
+    } else {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось войти как пользователь",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleEditUser = (employeeName: string) => {
-    toast({
-      title: "Редактирование",
-      description: `Открыто редактирование для ${employeeName}`,
-    });
+  const handleEditUser = (userData: Omit<Employee, 'id' | 'status'>, userId: string) => {
+    const success = updateUser(userId, userData);
+    if (success) {
+      toast({
+        title: "Успешно",
+        description: `Данные пользователя ${userData.name} обновлены`,
+      });
+      // Refresh employees list
+      const users = getAllUsers();
+      setEmployees(users);
+    } else {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось обновить данные пользователя",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDeleteUser = (employeeName: string) => {
-    toast({
-      title: "Удаление",
-      description: `Пользователь ${employeeName} удален`,
-      variant: "destructive",
-    });
+  const handleDeleteUser = (employeeId: string, employeeName: string) => {
+    const success = deleteUser(employeeId);
+    if (success) {
+      toast({
+        title: "Удаление",
+        description: `Пользователь ${employeeName} удален`,
+        variant: "destructive",
+      });
+      // Refresh employees list
+      const users = getAllUsers();
+      setEmployees(users);
+    } else {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось удалить пользователя",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddUser = (userData: Omit<Employee, 'id' | 'status'>) => {
+    const success = addUser(userData);
+    if (success) {
+      toast({
+        title: "Успешно",
+        description: `Пользователь ${userData.name} добавлен`,
+      });
+      // Refresh employees list
+      const users = getAllUsers();
+      setEmployees(users);
+    } else {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось добавить пользователя",
+        variant: "destructive",
+      });
+    }
   };
 
   if (!user || user.role !== 'admin') {
@@ -196,10 +230,7 @@ const AdminPanel = () => {
               <CardTitle className="text-xl font-bold text-gray-800">
                 Список сотрудников
               </CardTitle>
-              <Button className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700">
-                <Plus className="w-4 h-4 mr-2" />
-                Добавить сотрудника
-              </Button>
+              <UserDialog onSave={handleAddUser} />
             </div>
           </CardHeader>
           <CardContent>
@@ -209,7 +240,7 @@ const AdminPanel = () => {
                   <TableHead>Сотрудник</TableHead>
                   <TableHead>Статус</TableHead>
                   <TableHead>Время на перерыве</TableHead>
-                  <TableHead>Последняя активность</TableHead>
+                  <TableHead>Роль</TableHead>
                   <TableHead className="text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
@@ -231,40 +262,58 @@ const AdminPanel = () => {
                         : <span className="text-gray-400">—</span>
                       }
                     </TableCell>
-                    <TableCell className="text-sm text-gray-500">
-                      {employee.status === 'offline' && employee.lastSeen
-                        ? employee.lastSeen
-                        : employee.status !== 'offline'
-                        ? 'Сейчас в сети'
-                        : '—'
-                      }
+                    <TableCell>
+                      <Badge variant={employee.role === 'admin' ? 'default' : 'secondary'}>
+                        {employee.role === 'admin' ? 'Админ' : 'Пользователь'}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end space-x-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleLoginAsUser(employee.name)}
-                          className="border-blue-200 text-blue-600 hover:bg-blue-50"
-                        >
-                          <LogIn className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEditUser(employee.name)}
-                          className="border-gray-200 text-gray-600 hover:bg-gray-50"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteUser(employee.name)}
-                          className="border-red-200 text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {employee.role !== 'admin' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleLoginAsUser(employee.id, employee.name)}
+                            className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                          >
+                            <LogIn className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <UserDialog 
+                          user={employee}
+                          onSave={(userData) => handleEditUser(userData, employee.id)}
+                        />
+                        {employee.id !== user.id && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-red-200 text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Удалить пользователя?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Вы действительно хотите удалить пользователя {employee.name}? 
+                                  Это действие нельзя отменить.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Отмена</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteUser(employee.id, employee.name)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Удалить
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

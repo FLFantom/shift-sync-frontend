@@ -17,12 +17,17 @@ interface AuthContextType {
   logout: () => void;
   loading: boolean;
   updateUserStatus: (status: 'working' | 'break' | 'offline', breakStartTime?: string) => void;
+  loginAsUser: (userId: string) => boolean;
+  getAllUsers: () => User[];
+  updateUser: (userId: string, userData: Partial<User>) => boolean;
+  deleteUser: (userId: string) => boolean;
+  addUser: (userData: Omit<User, 'id' | 'status'>) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Mock data for demo purposes
-const mockUsers: User[] = [
+let mockUsers: User[] = [
   {
     id: '1',
     name: 'Иван Петров',
@@ -43,6 +48,22 @@ const mockUsers: User[] = [
     email: 'admin@company.com',
     role: 'admin',
     status: 'offline'
+  },
+  {
+    id: '4',
+    name: 'Александр Иванов',
+    email: 'alex@company.com', 
+    role: 'user',
+    status: 'break',
+    breakStartTime: new Date(Date.now() - 2700000).toISOString()
+  },
+  {
+    id: '5',
+    name: 'Елена Смирнова',
+    email: 'elena@company.com',
+    role: 'user',
+    status: 'break',
+    breakStartTime: new Date(Date.now() - 4500000).toISOString()
   }
 ];
 
@@ -67,7 +88,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // Mock authentication - in real app this would be an API call
       const foundUser = mockUsers.find(u => u.email === email);
       
       if (foundUser && password === '123456') {
@@ -115,11 +135,75 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       };
       setUser(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
+      
+      // Update in mockUsers array
+      const userIndex = mockUsers.findIndex(u => u.id === user.id);
+      if (userIndex !== -1) {
+        mockUsers[userIndex] = updatedUser;
+      }
     }
   };
 
+  const loginAsUser = (userId: string): boolean => {
+    if (user?.role !== 'admin') return false;
+    
+    const targetUser = mockUsers.find(u => u.id === userId);
+    if (targetUser) {
+      const token = 'mock-jwt-token';
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(targetUser));
+      localStorage.setItem('originalAdmin', JSON.stringify(user));
+      setUser(targetUser);
+      return true;
+    }
+    return false;
+  };
+
+  const getAllUsers = (): User[] => {
+    return mockUsers;
+  };
+
+  const updateUser = (userId: string, userData: Partial<User>): boolean => {
+    const userIndex = mockUsers.findIndex(u => u.id === userId);
+    if (userIndex !== -1) {
+      mockUsers[userIndex] = { ...mockUsers[userIndex], ...userData };
+      return true;
+    }
+    return false;
+  };
+
+  const deleteUser = (userId: string): boolean => {
+    const userIndex = mockUsers.findIndex(u => u.id === userId);
+    if (userIndex !== -1) {
+      mockUsers.splice(userIndex, 1);
+      return true;
+    }
+    return false;
+  };
+
+  const addUser = (userData: Omit<User, 'id' | 'status'>): boolean => {
+    const newUser: User = {
+      ...userData,
+      id: Date.now().toString(),
+      status: 'offline'
+    };
+    mockUsers.push(newUser);
+    return true;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, updateUserStatus }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      loading, 
+      updateUserStatus,
+      loginAsUser,
+      getAllUsers,
+      updateUser,
+      deleteUser,
+      addUser
+    }}>
       {children}
     </AuthContext.Provider>
   );
