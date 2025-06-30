@@ -28,11 +28,12 @@ export const useUpdateUser = () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
       // Toast обрабатывается в компоненте для большего контроля
     },
-    onError: (error: any) => {
+     onError: (error: unknown) => {
       console.error('Ошибка обновления пользователя:', error);
+      const message = (error as Error)?.message ?? 'Не удалось обновить данные пользователя';
       toast({
         title: "Ошибка",
-        description: error?.message || "Не удалось обновить данные пользователя",
+        description: message,
         variant: "destructive",
       });
     }
@@ -49,7 +50,7 @@ export const useDeleteUser = () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
       // Toast обрабатывается в компоненте для большего контроля
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Ошибка удаления пользователя:', error);
       // Не показываем toast здесь, обрабатываем в компоненте
     }
