@@ -1,12 +1,19 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User } from '../lib/api';
+import { toast } from '@/hooks/use-toast';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'user' | 'admin';
+  status: 'working' | 'break' | 'offline';
+  breakStartTime?: string;
+}
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
-  setUser: (user: User | null) => void;
-  setToken: (token: string | null) => void;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   loading: boolean;
   updateUserStatus: (status: 'working' | 'break' | 'offline', breakStartTime?: string) => void;
@@ -14,22 +21,43 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// Mock data for demo purposes
+const mockUsers: User[] = [
+  {
+    id: '1',
+    name: 'Иван Петров',
+    email: 'ivan@company.com',
+    role: 'user',
+    status: 'offline'
+  },
+  {
+    id: '2', 
+    name: 'Мария Сидорова',
+    email: 'maria@company.com',
+    role: 'user',
+    status: 'working'
+  },
+  {
+    id: '3',
+    name: 'Админ',
+    email: 'admin@company.com',
+    role: 'admin',
+    status: 'offline'
+  }
+];
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
+    const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
     
-    if (storedToken && userData) {
+    if (token && userData) {
       try {
-        const parsedUser = JSON.parse(userData);
-        setToken(storedToken);
-        setUser(parsedUser);
+        setUser(JSON.parse(userData));
       } catch (error) {
-        console.error('Error parsing stored user data:', error);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
@@ -37,140 +65,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   }, []);
 
+  const login = async (email: string, password: string): Promise<boolean> => {
+    try {
+      // Mock authentication - in real app this would be an API call
+      const foundUser = mockUsers.find(u => u.email === email);
+      
+      if (foundUser && password === '123456') {
+        const token = 'mock-jwt-token';
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(foundUser));
+        setUser(foundUser);
+        
+        toast({
+          title: "Добро пожаловать!",
+          description: `Вы вошли как ${foundUser.name}`,
+        });
+        
+        return true;
+      } else {
+        toast({
+          title: "Ошибка входа",
+          description: "Неверный email или пароль",
+          variant: "destructive",
+        });
+        return false;
+      }
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: "Произошла ошибка при входе",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
-    setToken(null);
-    console.log('User logged out, localStorage cleared');
   };
 
   const updateUserStatus = (status: 'working' | 'break' | 'offline', breakStartTime?: string) => {
-    setUser(prevUser => {
-      if (!prevUser) return null;
-      
-      const updatedUser = {
-        ...prevUser,
-        status
+    if (user) {
+      const updatedUser = { 
+        ...user, 
+        status, 
+        breakStartTime: status === 'break' ? breakStartTime || new Date().toISOString() : undefined 
       };
-      
-      // Логика управления временем перерыва
-      if (status === 'break') {
-        // Если это новый перерыв и передано время начала
-        if (breakStartTime) {
-          updatedUser.breakStartTime = breakStartTime;
-        }
-        // Если пользователь уже был на перерыве и возвращается с паузы,
-        // сохраняем старое время начала перерыва
-        else if (prevUser.status === 'break' && prevUser.breakStartTime) {
-          updatedUser.breakStartTime = prevUser.breakStartTime;
-        }
-        // Если пользователь переходит в перерыв впервые за день
-        else if (prevUser.status !== 'break') {
-          // Проверяем, есть ли сохраненное время перерыва за сегодня
-          const savedBreakTime = localStorage.getItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`);
-          if (savedBreakTime) {
-            // Если есть сохраненное время за сегодня, используем его
-            updatedUser.breakStartTime = savedBreakTime;
-          } else {
-            // Если нет сохраненного времени, устанавливаем текущее время
-            const newBreakTime = new Date().toISOString();
-            updatedUser.breakStartTime = newBreakTime;
-            // Сохраняем время начала перерыва за сегодня
-            localStorage.setItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`, newBreakTime);
-          }
-        }
-      } else if (status === 'working') {
-        // Когда пользователь возвращается к работе, не удаляем время перерыва
-        // Это позволит продолжить отсчет при следующем перерыве
-        // Время перерыва будет очищено только в начале нового дня
-        if (prevUser.breakStartTime) {
-          // Сохраняем время перерыва для возможного продолжения
-          localStorage.setItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`, prevUser.breakStartTime);
-        }
-        updatedUser.breakStartTime = prevUser.breakStartTime; // Сохраняем время
-      } else {
-        // Для статуса 'offline' также сохраняем время перерыва
-        updatedUser.breakStartTime = prevUser.breakStartTime;
-      }
-      
-      // Сохраняем обновленного пользователя в localStorage
+      setUser(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
-      
-      return updatedUser;
-    });
-  };
-
-  // Очистка времени перерыва в начале нового дня
-  useEffect(() => {
-    const checkNewDay = () => {
-      const today = new Date().toDateString();
-      const lastCheck = localStorage.getItem('lastDayCheck');
-      
-      if (lastCheck !== today) {
-        // Новый день - очищаем все сохраненные времена перерывов
-        const keys = Object.keys(localStorage);
-        keys.forEach(key => {
-          if (key.startsWith('breakStartTime_')) {
-            localStorage.removeItem(key);
-          }
-        });
-        
-        // Обновляем пользователя, очищая время перерыва
-        setUser(prevUser => {
-          if (prevUser && prevUser.breakStartTime) {
-            const updatedUser = {
-              ...prevUser,
-              breakStartTime: undefined,
-              status: 'offline' as const
-            };
-            localStorage.setItem('user', JSON.stringify(updatedUser));
-            return updatedUser;
-          }
-          return prevUser;
-        });
-        
-        localStorage.setItem('lastDayCheck', today);
-      }
-    };
-
-    // Проверяем при загрузке
-    checkNewDay();
-    
-    // Проверяем каждую минуту
-    const interval = setInterval(checkNewDay, 60000);
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleSetUser = (newUser: User | null) => {
-    setUser(newUser);
-    if (newUser) {
-      localStorage.setItem('user', JSON.stringify(newUser));
-    } else {
-      localStorage.removeItem('user');
-    }
-  };
-
-  const handleSetToken = (newToken: string | null) => {
-    setToken(newToken);
-    if (newToken) {
-      localStorage.setItem('token', newToken);
-    } else {
-      localStorage.removeItem('token');
     }
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      token,
-      setUser: handleSetUser,
-      setToken: handleSetToken,
-      logout, 
-      loading, 
-      updateUserStatus
-    }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, updateUserStatus }}>
       {children}
     </AuthContext.Provider>
   );

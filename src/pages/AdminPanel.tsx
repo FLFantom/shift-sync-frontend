@@ -1,28 +1,54 @@
+
+import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useGetAllUsers, useUpdateUser, useDeleteUser } from '../hooks/useAdminApi';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Users, Settings, ArrowLeft, Trash2, Loader2 } from 'lucide-react';
+import { Users, Settings, ArrowLeft, LogIn, Edit, Trash2, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import UserDialog from '../components/UserDialog';
-import UserLogsDialog from '../components/UserLogsDialog';
-import React from 'react';
+import { toast } from '@/hooks/use-toast';
+
+// Mock data for admin panel
+const mockEmployees = [
+  {
+    id: '1',
+    name: 'Иван Петров',
+    email: 'ivan@company.com',
+    status: 'offline' as const,
+    breakStartTime: null,
+    lastSeen: '2024-01-15 18:30'
+  },
+  {
+    id: '2',
+    name: 'Мария Сидорова', 
+    email: 'maria@company.com',
+    status: 'working' as const,
+    breakStartTime: null,
+    lastSeen: null
+  },
+  {
+    id: '3',
+    name: 'Александр Иванов',
+    email: 'alex@company.com', 
+    status: 'break' as const,
+    breakStartTime: new Date(Date.now() - 2700000).toISOString(), // 45 minutes ago
+    lastSeen: null
+  },
+  {
+    id: '4',
+    name: 'Елена Смирнова',
+    email: 'elena@company.com',
+    status: 'break' as const,
+    breakStartTime: new Date(Date.now() - 4500000).toISOString(), // 75 minutes ago
+    lastSeen: null
+  }
+];
 
 const AdminPanel = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  
-  const { data: employees, isLoading, error, refetch } = useGetAllUsers();
-  const updateUserMutation = useUpdateUser();
-  const deleteUserMutation = useDeleteUser();
-
-  // Принудительно обновляем данные при монтировании компонента
-  React.useEffect(() => {
-    refetch();
-  }, [refetch]);
+  const [employees] = useState(mockEmployees);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -54,50 +80,32 @@ const AdminPanel = () => {
     );
   };
 
-  const handleUpdateUser = (userData: { name: string; email: string; role: 'user' | 'admin' }, userId: number) => {
-    updateUserMutation.mutate({
-      userId,
-      data: { name: userData.name, role: userData.role }
+  const handleLoginAsUser = (employeeName: string) => {
+    toast({
+      title: "Вход выполнен",
+      description: `Вы вошли как ${employeeName}`,
+    });
+    // In real app, this would switch user context
+  };
+
+  const handleEditUser = (employeeName: string) => {
+    toast({
+      title: "Редактирование",
+      description: `Открыто редактирование для ${employeeName}`,
     });
   };
 
-  const handleDeleteUser = (employeeId: number) => {
-    deleteUserMutation.mutate(employeeId);
+  const handleDeleteUser = (employeeName: string) => {
+    toast({
+      title: "Удаление",
+      description: `Пользователь ${employeeName} удален`,
+      variant: "destructive",
+    });
   };
 
   if (!user || user.role !== 'admin') {
     return null;
   }
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
-        <div className="flex items-center space-x-2">
-          <Loader2 className="w-6 h-6 animate-spin" />
-          <span>Загрузка данных...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-red-600 mb-2">Ошибка загрузки</h2>
-          <p className="text-gray-600">Не удалось загрузить данные сотрудников</p>
-          <p className="text-sm text-gray-500 mt-2">
-            {error instanceof Error ? error.message : 'Неизвестная ошибка'}
-          </p>
-          <Button onClick={() => refetch()} className="mt-4">
-            Попробовать снова
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  console.log('Employees data in component:', employees);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
@@ -114,195 +122,155 @@ const AdminPanel = () => {
             </p>
           </div>
           
-          <div className="flex items-center space-x-2">
-            <Button
-              onClick={() => refetch()}
-              variant="outline"
-              size="sm"
-              className="border-blue-200 text-blue-600 hover:bg-blue-50"
-            >
-              Обновить
-            </Button>
-            <Button
-              onClick={() => navigate('/dashboard')}
-              variant="outline"
-              className="border-blue-200 text-blue-600 hover:bg-blue-50"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Назад к панели
-            </Button>
-          </div>
+          <Button
+            onClick={() => navigate('/dashboard')}
+            variant="outline"
+            className="border-blue-200 text-blue-600 hover:bg-blue-50"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Назад к панели
+          </Button>
         </div>
 
         {/* Statistics Cards */}
-        {employees && employees.length > 0 && (
-          <div className="grid md:grid-cols-4 gap-6 mb-8">
-            <Card className="bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0 shadow-xl">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-green-100 text-sm font-medium">На работе</p>
-                    <p className="text-3xl font-bold">
-                      {employees.filter(e => e.status === 'working').length}
-                    </p>
-                  </div>
-                  <Users className="w-12 h-12 text-green-200" />
+        <div className="grid md:grid-cols-4 gap-6 mb-8">
+          <Card className="bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0 shadow-xl">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-green-100 text-sm font-medium">На работе</p>
+                  <p className="text-3xl font-bold">
+                    {employees.filter(e => e.status === 'working').length}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+                <Users className="w-12 h-12 text-green-200" />
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card className="bg-gradient-to-r from-orange-500 to-yellow-600 text-white border-0 shadow-xl">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-orange-100 text-sm font-medium">На перерыве</p>
-                    <p className="text-3xl font-bold">
-                      {employees.filter(e => e.status === 'break').length}
-                    </p>
-                  </div>
-                  <Users className="w-12 h-12 text-orange-200" />
+          <Card className="bg-gradient-to-r from-orange-500 to-yellow-600 text-white border-0 shadow-xl">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-orange-100 text-sm font-medium">На перерыве</p>
+                  <p className="text-3xl font-bold">
+                    {employees.filter(e => e.status === 'break').length}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+                <Users className="w-12 h-12 text-orange-200" />
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card className="bg-gradient-to-r from-gray-500 to-slate-600 text-white border-0 shadow-xl">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-100 text-sm font-medium">Не в сети</p>
-                    <p className="text-3xl font-bold">
-                      {employees.filter(e => e.status === 'offline' || !e.status).length}
-                    </p>
-                  </div>
-                  <Users className="w-12 h-12 text-gray-200" />
+          <Card className="bg-gradient-to-r from-gray-500 to-slate-600 text-white border-0 shadow-xl">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-100 text-sm font-medium">Не в сети</p>
+                  <p className="text-3xl font-bold">
+                    {employees.filter(e => e.status === 'offline').length}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+                <Users className="w-12 h-12 text-gray-200" />
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-0 shadow-xl">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-blue-100 text-sm font-medium">Всего</p>
-                    <p className="text-3xl font-bold">{employees.length}</p>
-                  </div>
-                  <Users className="w-12 h-12 text-blue-200" />
+          <Card className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-0 shadow-xl">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-100 text-sm font-medium">Всего</p>
+                  <p className="text-3xl font-bold">{employees.length}</p>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                <Users className="w-12 h-12 text-blue-200" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Employees Table */}
         <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
           <CardHeader>
-            <CardTitle className="text-xl font-bold text-gray-800">
-              Список сотрудников ({employees?.length || 0})
-            </CardTitle>
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-xl font-bold text-gray-800">
+                Список сотрудников
+              </CardTitle>
+              <Button className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700">
+                <Plus className="w-4 h-4 mr-2" />
+                Добавить сотрудника
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            {employees && employees.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Сотрудник</TableHead>
-                    <TableHead>Статус</TableHead>
-                    <TableHead>Время на перерыве</TableHead>
-                    <TableHead>Роль</TableHead>
-                    <TableHead className="text-right">Действия</TableHead>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Сотрудник</TableHead>
+                  <TableHead>Статус</TableHead>
+                  <TableHead>Время на перерыве</TableHead>
+                  <TableHead>Последняя активность</TableHead>
+                  <TableHead className="text-right">Действия</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {employees.map((employee) => (
+                  <TableRow key={employee.id} className="hover:bg-blue-50/50">
+                    <TableCell>
+                      <div>
+                        <div className="font-medium text-gray-900">{employee.name}</div>
+                        <div className="text-sm text-gray-500">{employee.email}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {getStatusBadge(employee.status)}
+                    </TableCell>
+                    <TableCell>
+                      {employee.status === 'break' && employee.breakStartTime
+                        ? getBreakDuration(employee.breakStartTime)
+                        : <span className="text-gray-400">—</span>
+                      }
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-500">
+                      {employee.status === 'offline' && employee.lastSeen
+                        ? employee.lastSeen
+                        : employee.status !== 'offline'
+                        ? 'Сейчас в сети'
+                        : '—'
+                      }
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleLoginAsUser(employee.name)}
+                          className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                        >
+                          <LogIn className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditUser(employee.name)}
+                          className="border-gray-200 text-gray-600 hover:bg-gray-50"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteUser(employee.name)}
+                          className="border-red-200 text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {employees.map((employee) => (
-                    <TableRow key={employee.id} className="hover:bg-blue-50/50">
-                      <TableCell>
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {employee.name}
-                          </div>
-                          <div className="text-sm text-gray-500">{employee.email}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(employee.status || 'offline')}
-                      </TableCell>
-                      <TableCell>
-                        {employee.status === 'break' && employee.breakStartTime
-                          ? getBreakDuration(employee.breakStartTime)
-                          : <span className="text-gray-400">—</span>
-                        }
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={employee.role === 'admin' ? 'default' : 'secondary'}>
-                          {employee.role === 'admin' ? 'Админ' : 'Пользователь'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end space-x-2">
-                          <UserLogsDialog 
-                            userId={employee.id}
-                            userName={employee.name}
-                          />
-                          <UserDialog 
-                            user={{
-                              id: employee.id.toString(),
-                              name: employee.name,
-                              email: employee.email,
-                              role: employee.role,
-                              status: employee.status || 'offline',
-                              breakStartTime: employee.breakStartTime
-                            }}
-                            onSave={(userData) => handleUpdateUser(userData, employee.id)}
-                          />
-                          {employee.id !== user.id && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="border-red-200 text-red-600 hover:bg-red-50"
-                                  disabled={deleteUserMutation.isPending}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Удалить пользователя?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Вы действительно хотите удалить пользователя {employee.name}? 
-                                    Это действие нельзя отменить.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Отмена</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeleteUser(employee.id)}
-                                    className="bg-red-600 hover:bg-red-700"
-                                  >
-                                    Удалить
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-gray-500">Нет данных о сотрудниках</p>
-                <p className="text-sm text-gray-400 mt-2">
-                  API возвращает только данные текущего пользователя
-                </p>
-                <Button onClick={() => refetch()} className="mt-4">
-                  Обновить данные
-                </Button>
-              </div>
-            )}
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </div>
