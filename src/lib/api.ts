@@ -242,7 +242,7 @@ class ApiClient {
       return result.map(user => ({
         id: user.id || user.userId,
         email: user.email,
-        name: user.name || 'Unknown User',
+        name: user.name || user.fullName || this.extractNameFromEmail(user.email),
         role: user.role || 'user',
         status: user.status || 'offline',
         breakStartTime: user.breakStartTime
@@ -254,68 +254,71 @@ class ApiClient {
       return result.data.map(user => ({
         id: user.id || user.userId,
         email: user.email,
-        name: user.name || 'Unknown User',
+        name: user.name || user.fullName || this.extractNameFromEmail(user.email),
         role: user.role || 'user',
         status: user.status || 'offline',
         breakStartTime: user.breakStartTime
       }));
     }
     
-    // Если API возвращает только данные одного пользователя
+    // Если API возвращает только данные одного пользователя (что происходит сейчас)
     if (result.success && result.data) {
-      // Проверяем, есть ли userId или id в data
-      if (result.data.userId || result.data.id) {
-        return [{
-          id: result.data.userId || result.data.id,
-          email: result.data.email,
-          name: result.data.name || 'Unknown User',
-          role: result.data.role || 'user',
-          status: result.data.status || 'offline',
-          breakStartTime: result.data.breakStartTime
-        }];
+      const userData = result.data;
+      // Получаем дополнительные данные из localStorage, если доступны
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      
+      const users = [{
+        id: userData.userId || userData.id,
+        email: userData.email,
+        name: userData.name || userData.fullName || currentUser.name || this.extractNameFromEmail(userData.email),
+        role: userData.role || 'user',
+        status: userData.status || 'offline',
+        breakStartTime: userData.breakStartTime
+      }];
+      
+      // Если текущий пользователь отличается от возвращенного, добавляем его тоже
+      if (currentUser.id && currentUser.id !== userData.userId && currentUser.id !== userData.id) {
+        users.push({
+          id: currentUser.id,
+          email: currentUser.email,
+          name: currentUser.name || this.extractNameFromEmail(currentUser.email),
+          role: currentUser.role || 'user',
+          status: 'offline',
+          breakStartTime: undefined
+        });
       }
+      
+      return users;
     }
     
     // Если данные пользователя находятся на верхнем уровне result
     if (result.userId || result.id) {
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      
       return [{
         id: result.userId || result.id,
         email: result.email,
-        name: result.name || 'Unknown User',
+        name: result.name || result.fullName || currentUser.name || this.extractNameFromEmail(result.email),
         role: result.role || 'user',
         status: result.status || 'offline',
         breakStartTime: result.breakStartTime
       }];
     }
     
-    // Временное решение: создаем тестовых пользователей, если API не возвращает список
-    console.warn('API не возвращает список пользователей, создаем тестовые данные');
-    return [
-      {
-        id: result.data?.userId || result.userId || 1,
-        email: result.data?.email || result.email || 'admin@example.com',
-        name: result.data?.name || result.name || 'Admin User',
-        role: result.data?.role || result.role || 'admin',
-        status: 'offline',
-        breakStartTime: undefined
-      },
-      {
-        id: 2,
-        email: 'user@example.com',
-        name: 'John Doe',
-        role: 'user',
-        status: 'working',
-        breakStartTime: undefined
-      },
-      {
-        id: 3,
-        email: 'jane@example.com',
-        name: 'Jane Smith',
-        role: 'user',
-        status: 'break',
-        breakStartTime: new Date(Date.now() - 15 * 60 * 1000).toISOString()
-      }
-    ];
+    // Если ничего не найдено, возвращаем пустой массив
+    console.warn('API не возвращает список пользователей, возвращаем пустой массив');
+    return [];
+  }
+
+  private extractNameFromEmail(email: string): string {
+    if (!email) return 'Неизвестный пользователь';
+    
+    const localPart = email.split('@')[0];
+    // Пытаемся красиво отформатировать имя из email
+    return localPart
+      .split(/[._-]/)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
   }
 
   async updateUser(userId: number, data: { name: string; role: string }) {

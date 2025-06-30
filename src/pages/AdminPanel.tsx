@@ -9,14 +9,20 @@ import { Users, Settings, ArrowLeft, Trash2, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import UserDialog from '../components/UserDialog';
 import UserLogsDialog from '../components/UserLogsDialog';
+import React from 'react';
 
 const AdminPanel = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
-  const { data: employees, isLoading, error } = useGetAllUsers();
+  const { data: employees, isLoading, error, refetch } = useGetAllUsers();
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
+
+  // Принудительно обновляем данные при монтировании компонента
+  React.useEffect(() => {
+    refetch();
+  }, [refetch]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -83,6 +89,9 @@ const AdminPanel = () => {
           <p className="text-sm text-gray-500 mt-2">
             {error instanceof Error ? error.message : 'Неизвестная ошибка'}
           </p>
+          <Button onClick={() => refetch()} className="mt-4">
+            Попробовать снова
+          </Button>
         </div>
       </div>
     );
@@ -105,14 +114,24 @@ const AdminPanel = () => {
             </p>
           </div>
           
-          <Button
-            onClick={() => navigate('/dashboard')}
-            variant="outline"
-            className="border-blue-200 text-blue-600 hover:bg-blue-50"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Назад к панели
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Button
+              onClick={() => refetch()}
+              variant="outline"
+              size="sm"
+              className="border-blue-200 text-blue-600 hover:bg-blue-50"
+            >
+              Обновить
+            </Button>
+            <Button
+              onClick={() => navigate('/dashboard')}
+              variant="outline"
+              className="border-blue-200 text-blue-600 hover:bg-blue-50"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Назад к панели
+            </Button>
+          </div>
         </div>
 
         {/* Statistics Cards */}
@@ -199,7 +218,7 @@ const AdminPanel = () => {
                       <TableCell>
                         <div>
                           <div className="font-medium text-gray-900">
-                            {employee.name || 'Неизвестный пользователь'}
+                            {employee.name}
                           </div>
                           <div className="text-sm text-gray-500">{employee.email}</div>
                         </div>
@@ -222,12 +241,12 @@ const AdminPanel = () => {
                         <div className="flex items-center justify-end space-x-2">
                           <UserLogsDialog 
                             userId={employee.id}
-                            userName={employee.name || 'Неизвестный пользователь'}
+                            userName={employee.name}
                           />
                           <UserDialog 
                             user={{
                               id: employee.id.toString(),
-                              name: employee.name || 'Неизвестный пользователь',
+                              name: employee.name,
                               email: employee.email,
                               role: employee.role,
                               status: employee.status || 'offline',
@@ -251,7 +270,7 @@ const AdminPanel = () => {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Удалить пользователя?</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Вы действительно хотите удалить пользователя {employee.name || employee.email}? 
+                                    Вы действительно хотите удалить пользователя {employee.name}? 
                                     Это действие нельзя отменить.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
@@ -277,8 +296,11 @@ const AdminPanel = () => {
               <div className="text-center py-8">
                 <p className="text-gray-500">Нет данных о сотрудниках</p>
                 <p className="text-sm text-gray-400 mt-2">
-                  Проверьте подключение к серверу или обратитесь к администратору
+                  API возвращает только данные текущего пользователя
                 </p>
+                <Button onClick={() => refetch()} className="mt-4">
+                  Обновить данные
+                </Button>
               </div>
             )}
           </CardContent>
