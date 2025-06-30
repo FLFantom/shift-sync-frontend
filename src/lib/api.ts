@@ -6,22 +6,35 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  name: string;
+}
+
 export interface LoginResponse {
   success: boolean;
-  message?: string;
-  user?: {
-    id: number;
-    email: string;
-    name: string;
-    role: 'user' | 'admin';
+  data?: {
+    message: string;
+    user: User;
+    token: string;
   };
-  token?: string;
+  error?: string;
+}
+
+export interface RegisterResponse {
+  success: boolean;
+  data?: {
+    message: string;
+    user: User;
+    token: string;
+  };
   error?: string;
 }
 
 export interface TimeActionRequest {
   action: 'start_work' | 'start_break' | 'end_break' | 'end_work';
-  breakDuration?: number;
+  break_duration?: number;
 }
 
 export interface User {
@@ -37,7 +50,9 @@ export interface UserLog {
   id: string;
   action: string;
   timestamp: string;
-  details?: string;
+  break_duration?: number;
+  name: string;
+  email: string;
 }
 
 // Custom error types
@@ -59,7 +74,6 @@ class ApiClient {
   private getToken() {
     const tokenData = localStorage.getItem('token');
     if (!tokenData) return null;
-    
     return tokenData;
   }
 
@@ -75,28 +89,27 @@ class ApiClient {
   private async handleResponse(response: Response) {
     console.log('API Response status:', response.status);
     
-    // Специальная обработка статусов ошибок
-    switch (response.status) {
-      case 401:
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-        throw new AuthError('Session expired', 401);
-      case 403:
-        throw new AuthError('Insufficient permissions', 403);
-      case 422:
-        const errorData = await response.json().catch(() => ({}));
-        throw new ValidationError(errorData.error?.message || 'Validation failed', 422);
-      case 500:
-        throw new Error('Server error occurred');
-    }
-    
+    // Handle specific error status codes
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`HTTP error! status: ${response.status}, message: ${error}`);
+      switch (response.status) {
+        case 401:
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          throw new AuthError('Session expired', 401);
+        case 403:
+          throw new AuthError('Insufficient permissions', 403);
+        case 422:
+          const errorData = await response.json().catch(() => ({}));
+          throw new ValidationError(errorData.error || 'Validation failed', 422);
+        case 500:
+          throw new Error('Server error occurred');
+        default:
+          const error = await response.text().catch(() => 'Unknown error');
+          throw new Error(`HTTP error! status: ${response.status}, message: ${error}`);
+      }
     }
     
-    // Проверяем, есть ли содержимое для парсинга
+    // Parse response text
     const text = await response.text();
     console.log('Raw response:', text);
     
@@ -108,26 +121,55 @@ class ApiClient {
       const jsonData = JSON.parse(text);
       console.log('Parsed response:', jsonData);
       
-      // Обработка ответов n8n в формате {success: true, data: {...}}
-      if (jsonData.success && jsonData.data) {
-        return jsonData.data;
-      }
-      
-      // Если это прямой успешный ответ (login, register)
-      if (jsonData.success) {
-        return jsonData;
-      }
-      
-      // Обработка ошибок n8n
-      if (jsonData.success === false && jsonData.error) {
-        throw new Error(jsonData.error);
+      // Handle error responses
+      if (jsonData.success === false) {
+        throw new Error(jsonData.error || 'Request failed');
       }
       
       return jsonData;
     } catch (parseError) {
-      console.error('Failed to parse JSON:', text);
-      throw new Error('Invalid JSON response');
+      if (parseError instanceof Error && parseError.message !== 'Request failed') {
+        console.error('Failed to parse JSON:', text);
+        throw new Error('Invalid JSON response');
+      }
+      throw parseError;
     }
+  }
+
+  async register(data: RegisterRequest): Promise<RegisterResponse> {
+    console.log('Register request:', data);
+    
+    const response = await fetch(`${API_BASE_URL}/register-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
+      },
+      body: JSON.stringify(data)
+    });
+
+    const result = await this.handleResponse(response);
+    
+    // Handle both direct and wrapped responses
+    if (result.success && result.data) {
+      // Wrapped format: {success: true, data: {user, token, message}}
+      return {
+        success: true,
+        data: result.data
+      };
+    } else if (result.success && result.user && result.token) {
+      // Direct format: {success: true, user, token, message}
+      return {
+        success: true,
+        data: {
+          message: result.message || 'Registration successful',
+          user: result.user,
+          token: result.token
+        }
+      };
+    }
+    
+    throw new Error('Invalid registration response format');
   }
 
   async login(data: LoginRequest): Promise<LoginResponse> {
@@ -144,29 +186,31 @@ class ApiClient {
 
     const result = await this.handleResponse(response);
     
-    // Валидация структуры ответа
-    if (!result.success || !result.token || !result.user) {
-      throw new Error('Invalid login response format');
+    // Handle wrapped response format: {success: true, data: {user, token, message}}
+    if (result.success && result.data) {
+      // Store token and user data
+      localStorage.setItem('token', result.data.token);
+      localStorage.setItem('user', JSON.stringify(result.data.user));
+      
+      return {
+        success: true,
+        data: result.data
+      };
     }
     
-    // Сохраняем токен и данные пользователя
-    localStorage.setItem('token', result.token);
-    localStorage.setItem('user', JSON.stringify(result.user));
-    
-    return result;
+    throw new Error('Invalid login response format');
   }
 
   async timeAction(data: TimeActionRequest) {
     console.log('Sending time action request:', data);
     
-    // n8n ожидает userid в теле запроса (извлекается из JWT)
     const requestBody: any = {
       action: data.action
     };
     
-    // Добавляем breakDuration только для действий с перерывом
-    if (data.breakDuration !== undefined && (data.action === 'end_break' || data.action === 'start_break')) {
-      requestBody.break_duration = data.breakDuration;
+    // Add break_duration for break-related actions
+    if (data.break_duration !== undefined && (data.action === 'end_break' || data.action === 'start_break')) {
+      requestBody.break_duration = data.break_duration;
     }
     
     const response = await fetch(`${API_BASE_URL}/time-action`, {
@@ -175,7 +219,14 @@ class ApiClient {
       body: JSON.stringify(requestBody)
     });
 
-    return this.handleResponse(response);
+    const result = await this.handleResponse(response);
+    
+    // Handle wrapped response format
+    if (result.success && result.data) {
+      return result.data;
+    }
+    
+    return result;
   }
 
   async getAllUsers(): Promise<User[]> {
@@ -186,8 +237,10 @@ class ApiClient {
 
     const result = await this.handleResponse(response);
     
-    // n8n возвращает прямой массив пользователей после обработки
-    if (Array.isArray(result)) {
+    // Handle both wrapped and direct formats
+    if (result.success && result.data) {
+      return Array.isArray(result.data) ? result.data : [];
+    } else if (Array.isArray(result)) {
       return result;
     }
     
@@ -201,7 +254,13 @@ class ApiClient {
       body: JSON.stringify(data)
     });
 
-    return this.handleResponse(response);
+    const result = await this.handleResponse(response);
+    
+    if (result.success && result.data) {
+      return result.data;
+    }
+    
+    return result;
   }
 
   async deleteUser(userId: number) {
@@ -210,7 +269,13 @@ class ApiClient {
       headers: this.getAuthHeaders()
     });
 
-    return this.handleResponse(response);
+    const result = await this.handleResponse(response);
+    
+    if (result.success && result.data) {
+      return result.data;
+    }
+    
+    return result;
   }
 
   async getUserLogs(userId: number): Promise<UserLog[]> {
@@ -221,8 +286,10 @@ class ApiClient {
 
     const result = await this.handleResponse(response);
     
-    // n8n возвращает прямой массив логов после обработки
-    if (Array.isArray(result)) {
+    // Handle both wrapped and direct formats
+    if (result.success && result.data) {
+      return Array.isArray(result.data) ? result.data : [];
+    } else if (Array.isArray(result)) {
       return result;
     }
     
