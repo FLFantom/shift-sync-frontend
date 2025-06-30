@@ -35,6 +35,14 @@ const UserLogsDialog = ({ userId, userName }: UserLogsDialogProps) => {
     }
   };
 
+  const getBreakDurationText = (action: string, breakDuration?: number) => {
+    if (action === 'end_break' && breakDuration) {
+      const minutes = Math.floor(breakDuration / 60);
+      return `Длительность: ${minutes} мин`;
+    }
+    return '—';
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -85,7 +93,7 @@ const UserLogsDialog = ({ userId, userName }: UserLogsDialogProps) => {
                   <TableCell>{formatDate(log.timestamp)}</TableCell>
                   <TableCell>{getActionBadge(log.action)}</TableCell>
                   <TableCell className="text-gray-600">
-                    {log.details || '—'}
+                    {getBreakDurationText(log.action, log.break_duration)}
                   </TableCell>
                 </TableRow>
               ))}
