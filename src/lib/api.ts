@@ -1,5 +1,5 @@
 // ==========================================================
-// ИСПРАВЛЕННЫЙ API КЛИЕНТ С ПРАВИЛЬНЫМИ URL
+// ИСПРАВЛЕННЫЙ API КЛИЕНТ - CORS И ПАРСИНГ ДАННЫХ
 // ==========================================================
 
 const API_BASE_URL = 'https://gelding-able-sailfish.ngrok-free.app/webhook';
@@ -126,7 +126,7 @@ async function makeApiRequest<T>(url: string, options: RequestInit): Promise<T> 
   let responseText: string;
   try {
     responseText = await response.text();
-    console.log(`[API] Тело ответа (первые 200 символов):`, responseText.substring(0, 200));
+    console.log(`[API] Тело ответа:`, responseText);
   } catch (error) {
     throw new NetworkError('Ошибка чтения ответа сервера');
   }
@@ -316,7 +316,7 @@ class ApiClient {
     });
   }
 
-  // МЕТОД ДЛЯ ПОЛУЧЕНИЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ С ПОДРОБНОЙ ДИАГНОСТИКОЙ
+  // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ ПОЛУЧЕНИЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ - КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ
   async getAllUsers(): Promise<User[]> {
     const token = this.getToken();
     if (!token || !this.validateToken(token)) {
@@ -330,85 +330,60 @@ class ApiClient {
       headers: this.getAuthHeaders(),
     });
 
-    console.log('[getAllUsers] Полученный результат:', result);
-    console.log('[getAllUsers] Тип результата:', typeof result);
-    console.log('[getAllUsers] Является массивом:', Array.isArray(result));
+    console.log('[getAllUsers] RAW результат:', result);
 
     if (!result) {
       throw new Error('Сервер не вернул данные');
     }
 
-    let users: any[] = [];
-
-    // Пробуем все возможные варианты структуры ответа
-    if (result.success === true && result.data) {
-      console.log('[getAllUsers] Обрабатываем result.success.data...');
-      if (Array.isArray(result.data)) {
-        users = result.data;
-        console.log('[getAllUsers] ✓ Найден массив в result.data');
-      } else if (result.data.users && Array.isArray(result.data.users)) {
-        users = result.data.users;
-        console.log('[getAllUsers] ✓ Найден массив в result.data.users');
-      } else {
-        console.log('[getAllUsers] result.data тип:', typeof result.data);
-        console.log('[getAllUsers] result.data содержимое:', result.data);
-      }
-    } else if (Array.isArray(result)) {
-      users = result;
-      console.log('[getAllUsers] ✓ result является массивом напрямую');
-    } else if (result.data && Array.isArray(result.data)) {
-      users = result.data;
-      console.log('[getAllUsers] ✓ Найден массив в result.data');
-    } else {
-      // Последняя попытка - ищем массив в любом месте объекта
-      console.log('[getAllUsers] Поиск массива в объекте...');
-      const searchForArray = (obj: any, path = ''): any[] | null => {
-        for (const key in obj) {
-          if (obj.hasOwnProperty(key)) {
-            const currentPath = path ? `${path}.${key}` : key;
-            console.log(`[getAllUsers] Проверяем ${currentPath}:`, typeof obj[key], Array.isArray(obj[key]));
-            
-            if (Array.isArray(obj[key])) {
-              console.log(`[getAllUsers] ✓ Найден массив в ${currentPath}`);
-              return obj[key];
-            }
-            
-            if (typeof obj[key] === 'object' && obj[key] !== null) {
-              const nested = searchForArray(obj[key], currentPath);
-              if (nested) return nested;
-            }
-          }
-        }
-        return null;
-      };
-
-      const foundArray = searchForArray(result);
-      if (foundArray) {
-        users = foundArray;
-      }
-    }
-
-    if (!Array.isArray(users)) {
-      console.error('[getAllUsers] Не удалось найти массив пользователей!');
-      console.error('[getAllUsers] Структура ответа:', JSON.stringify(result, null, 2));
+    // ОСНОВЫВАЯСЬ НА ЛОГАХ: вижу что приходит объект { success: true, data: [...] }
+    // Ваш ответ в консоли показывает именно такую структуру
+    if (result.success === true && Array.isArray(result.data)) {
+      console.log(`[getAllUsers] ✓ Найден массив пользователей в result.data: ${result.data.length} элементов`);
       
-      // Возвращаем пустой массив вместо ошибки
-      return [];
+      return result.data.map((user: any, index: number) => {
+        console.log(`[getAllUsers] Обработка пользователя ${index + 1}:`, user);
+        return {
+          id: user.id || index,
+          email: user.email || 'no-email',
+          name: user.name || 'Unknown',
+          role: user.role || 'user',
+          status: user.status || 'offline',
+          breakStartTime: user.breakStartTime,
+        };
+      });
     }
 
-    console.log(`[getAllUsers] ✓ Найдено ${users.length} пользователей`);
-
-    return users.map((user: any, index: number) => {
-      console.log(`[getAllUsers] Обработка пользователя ${index + 1}:`, user);
-      return {
-        id: user.id || index,
-        email: user.email || 'no-email',
-        name: user.name || 'Unknown',
-        role: user.role || 'user',
+    // Дополнительные проверки если основной не сработал
+    if (Array.isArray(result)) {
+      console.log('[getAllUsers] ✓ result является массивом напрямую');
+      return result.map((user: any) => ({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
         status: user.status || 'offline',
         breakStartTime: user.breakStartTime,
-      };
-    });
+      }));
+    }
+
+    if (result.data && Array.isArray(result.data)) {
+      console.log('[getAllUsers] ✓ Найден массив в result.data');
+      return result.data.map((user: any) => ({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        status: user.status || 'offline',
+        breakStartTime: user.breakStartTime,
+      }));
+    }
+
+    console.error('[getAllUsers] Не удалось найти массив пользователей!');
+    console.error('[getAllUsers] Структура ответа:', JSON.stringify(result, null, 2));
+    
+    // Возвращаем пустой массив
+    return [];
   }
 
   // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ ОБНОВЛЕНИЯ ПОЛЬЗОВАТЕЛЯ
@@ -426,10 +401,8 @@ class ApiClient {
       throw new ValidationError('Некорректная роль пользователя');
     }
 
-    // ИСПОЛЬЗУЕМ ПРАВИЛЬНЫЙ URL ДЛЯ ОБНОВЛЕНИЯ
     const url = `${API_BASE_URL}/admin/user/${userId}`;
     console.log(`[updateUser] URL: ${url}`);
-    console.log(`[updateUser] Data:`, data);
 
     return makeApiRequest(url, {
       method: 'PUT',
@@ -441,7 +414,7 @@ class ApiClient {
     });
   }
 
-  // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ УДАЛЕНИЯ ПОЛЬЗОВАТЕЛЯ - ГЛАВНОЕ ИСПРАВЛЕНИЕ
+  // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ УДАЛЕНИЯ ПОЛЬЗОВАТЕЛЯ - ИСПОЛЬЗУЕТ POST ВМЕСТО DELETE
   async deleteUser(userId: number): Promise<any> {
     const token = this.getToken();
     if (!token || !this.validateToken(token)) {
@@ -452,13 +425,15 @@ class ApiClient {
       throw new ValidationError('Некорректный ID пользователя');
     }
 
-    // ИСПОЛЬЗУЕМ ПРАВИЛЬНЫЙ URL ДЛЯ УДАЛЕНИЯ
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем POST вместо DELETE для обхода CORS
     const url = `${API_BASE_URL}/admin/delete-user/${userId}`;
     console.log(`[deleteUser] URL: ${url}`);
+    console.log(`[deleteUser] Используем POST вместо DELETE для обхода CORS`);
 
     return makeApiRequest(url, {
-      method: 'DELETE', // или POST, если ваш webhook настроен на POST
-      headers: this.getAuthHeaders()
+      method: 'POST', // ИЗМЕНЕНО: POST вместо DELETE
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ userId }) // Добавляем тело запроса
     });
   }
 
