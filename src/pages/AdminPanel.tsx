@@ -109,6 +109,57 @@ const AdminPanel = () => {
           </div>
         </div>
 
+        {/* Статистика по сотрудникам */}
+        {employees && employees.length > 0 && (
+          <div className="grid md:grid-cols-4 gap-6 mb-8">
+            <Card className="bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0 shadow-xl">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-green-100 text-sm font-medium">На работе</p>
+                    <p className="text-3xl font-bold">{employees.filter(e => e.status === 'working').length}</p>
+                  </div>
+                  <Users className="w-12 h-12 text-green-200" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-r from-orange-500 to-yellow-600 text-white border-0 shadow-xl">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-orange-100 text-sm font-medium">На перерыве</p>
+                    <p className="text-3xl font-bold">{employees.filter(e => e.status === 'break').length}</p>
+                  </div>
+                  <Users className="w-12 h-12 text-orange-200" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-r from-gray-500 to-slate-600 text-white border-0 shadow-xl">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-100 text-sm font-medium">Не в сети</p>
+                    <p className="text-3xl font-bold">{employees.filter(e => e.status === 'offline' || !e.status).length}</p>
+                  </div>
+                  <Users className="w-12 h-12 text-gray-200" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-0 shadow-xl">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-blue-100 text-sm font-medium">Всего</p>
+                    <p className="text-3xl font-bold">{employees.length}</p>
+                  </div>
+                  <Users className="w-12 h-12 text-blue-200" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Таблица сотрудников */}
         <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
           <CardHeader>
             <CardTitle className="text-xl font-bold text-gray-800">
