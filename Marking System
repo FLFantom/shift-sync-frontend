@@ -1,0 +1,1313 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Create users table\nCREATE TABLE IF NOT EXISTS users (\n  id SERIAL PRIMARY KEY,\n  email VARCHAR(255) UNIQUE NOT NULL,\n  password VARCHAR(255) NOT NULL,\n  name VARCHAR(100) NOT NULL,\n  role VARCHAR(20) DEFAULT 'user',\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);\n\n-- Create time_logs table\nCREATE TABLE IF NOT EXISTS time_logs (\n  id SERIAL PRIMARY KEY,\n  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  action VARCHAR(20) NOT NULL,\n  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n  break_duration INTEGER DEFAULT 0,\n  CONSTRAINT valid_action CHECK (action IN ('start_work', 'start_break', 'end_break', 'end_work'))\n);\n\n-- Create indexes for better performance\nCREATE INDEX IF NOT EXISTS idx_time_logs_user_id ON time_logs(user_id);\nCREATE INDEX IF NOT EXISTS idx_time_logs_timestamp ON time_logs(timestamp);\n\n-- Insert default admin user (password: admin123)\nINSERT INTO users (email, password, name, role) \nVALUES ('admin@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewJmRzVfp3iqE.uO', 'Admin User', 'admin') \nON CONFLICT (email) DO NOTHING;",
+        "options": {}
+      },
+      "id": "b2ad16a2-21b1-40c6-bb43-2a2b6f61888a",
+      "name": "Database Setup",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -2280,
+        -260
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AcgPwRkrIpLhRPNV",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "register-user",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "bd3120bb-b539-4eb3-922d-c549bcb4cebf",
+      "name": "Register User Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -2280,
+        -60
+      ],
+      "webhookId": "b2c3d4e5-f6a7-4890-b123-c4d5e6f7a890"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate registration data\nconst { email, password, name } = $input.first().json.body;\n\nif (!email || !password || !name) {\n  return [{\n    json: {\n      error: true,\n      status: 400,\n      message: 'Missing required fields: email, password, name'\n    }\n  }];\n}\n\nif (password.length < 6) {\n  return [{\n    json: {\n      error: true,\n      status: 400,\n      message: 'Password must be at least 6 characters long'\n    }\n  }];\n}\n\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nif (!emailRegex.test(email)) {\n  return [{\n    json: {\n      error: true,\n      status: 400,\n      message: 'Invalid email format'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    email: email.toLowerCase(),\n    password,\n    name,\n    role: 'user'\n  }\n}];"
+      },
+      "id": "ba01b85f-126d-4db3-ad83-f1f0a72807fa",
+      "name": "Validate Registration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2040,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO users (email, password, name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role, created_at",
+        "options": {
+          "queryReplacement": "={{ $json.email }}, {{ $json.password }}, {{ $json.name }}, {{ $json.role }}"
+        }
+      },
+      "id": "1a5fc33a-a880-4cf3-b7a3-3720f3558e2b",
+      "name": "Insert User",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -1560,
+        -60
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AcgPwRkrIpLhRPNV",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate JWT token\nconst jwt = require('jsonwebtoken');\nconst secret = '23GP3dGQZyyHLQSOwJ9CEOTJ7YpMTrChbnwztDRI';\n\nconst user = $input.first().json;\nconst token = jwt.sign(\n  { \n    userId: user.id,\n    email: user.email,\n    role: user.role\n  },\n  secret,\n  { expiresIn: '24h' }\n);\n\nreturn [{\n  json: {\n    success: true,\n    message: 'User registered successfully',\n    user: {\n      id: user.id,\n      email: user.email,\n      name: user.name,\n      role: user.role\n    },\n    token\n  }\n}];"
+      },
+      "id": "a5e0ad81-123d-4e06-a5a5-0dd6ddbf28d3",
+      "name": "Generate JWT for Registration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1320,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "login",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "8a6fb88a-8390-4c8b-abd4-874e54ca6b44",
+      "name": "Login Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -2280,
+        160
+      ],
+      "webhookId": "a7b8c9d0-e1f2-4345-a678-b9c0d1e2f345"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, email, password, name, role FROM users WHERE email = $1",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ $('Login Webhook').item.json.body.email }}"
+        }
+      },
+      "id": "b851ce4c-d236-459e-8281-f9c655c69a3d",
+      "name": "Get User by Email",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -1800,
+        160
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AcgPwRkrIpLhRPNV",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verify password\nconst bcrypt = require('bcrypt');\n\n// Данные приходят после ноды Merge\n// $json.inputPassword - пароль, который ввел пользователь\n// $json.password - хеш пароля из базы данных\nconst { inputPassword, password: hashedPassword, ...user } = $json;\n\nif (!inputPassword) {\n  $responseCode = 400;\n  return [{\n    json: {\n      error: true,\n      message: 'Password is required'\n    }\n  }];\n}\n\nif (!hashedPassword) {\n    $responseCode = 401;\n    return [{\n        json: {\n            error: true,\n            message: 'Invalid email or password' // Не говорим, что именно не так\n        }\n    }];\n}\n\n// Сравниваем пароль от пользователя с хешем из БД\nconst isValid = await bcrypt.compare(inputPassword, hashedPassword);\n\nif (!isValid) {\n  $responseCode = 401;\n  return [{\n    json: {\n      error: true,\n      message: 'Invalid email or password'\n    }\n  }];\n}\n\n// Хеш пароля наружу не отдаём\nreturn [{\n  json: {\n    ...user // Возвращаем все данные пользователя, кроме хеша\n  }\n}];"
+      },
+      "id": "83bbba06-076d-4349-9a0b-71b25ff4136c",
+      "name": "Verify Password",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1300,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate JWT token for login\nconst jwt = require('jsonwebtoken');\nconst secret = '23GP3dGQZyyHLQSOwJ9CEOTJ7YpMTrChbnwztDRI';\n\nconst user = $input.first().json;\nconst token = jwt.sign(\n  { \n    userId: user.id,\n    email: user.email,\n    role: user.role\n  },\n  secret,\n  { expiresIn: '24h' }\n);\n\nreturn [{\n  json: {\n    success: true,\n    data: { // Оборачиваем полезную нагрузку в 'data'\n      message: 'Login successful',\n      user: {\n        id: user.id,\n        email: user.email,\n        name: user.name,\n        role: user.role\n      },\n      token\n    }\n  }\n}];"
+      },
+      "id": "c29d34c4-f643-4c05-8fc1-09f5f0e772cc",
+      "name": "Generate JWT for Login",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1060,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "time-action",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a19d6fb7-5cb2-42b6-87cf-ea041ce8fb3c",
+      "name": "Time Action Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -2280,
+        360
+      ],
+      "webhookId": "e1f2a3b4-c5d6-4789-e012-f3a4b5c6d789"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verify JWT token\nconst jwt = require('jsonwebtoken');\nconst secret = '23GP3dGQZyyHLQSOwJ9CEOTJ7YpMTrChbnwztDRI';\n\nconst authHeader = $input.first().json.headers.authorization;\n\nif (!authHeader || !authHeader.startsWith('Bearer ')) {\n  return [{\n    json: {\n      error: true,\n      status: 401,\n      message: 'Missing or invalid authorization header'\n    }\n  }];\n}\n\nconst token = authHeader.substring(7);\n\ntry {\n  const decoded = jwt.verify(token, secret);\n  return [{\n    json: {\n      userId: decoded.userId || decoded.id || decoded.sub,\n      email: decoded.email,\n      role: decoded.role,\n      action: $input.first().json.body.action,\n      breakDuration: $input.first().json.body.break_duration || 0\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      error: true,\n      status: 401,\n      message: 'Invalid or expired token'\n    }\n  }];\n}"
+      },
+      "id": "64505e02-272c-46b5-a21b-3e66a80a14b9",
+      "name": "Verify JWT Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2040,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO time_logs (user_id, action, break_duration) VALUES ($1, $2, $3) RETURNING id, user_id, action, timestamp, break_duration",
+        "options": {
+          "queryReplacement": "={{ $json.userId }}, {{ $json.action }}, {{ $json.breakDuration }}"
+        }
+      },
+      "id": "98216894-c092-44ef-9071-47ae9910da05",
+      "name": "Log Time Action",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -1560,
+        360
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AcgPwRkrIpLhRPNV",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "admin/users",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "05cd343c-dc34-4489-8087-03a8285ff54a",
+      "name": "Admin Users Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -2280,
+        560
+      ],
+      "webhookId": "b4c5d6e7-f8a9-4012-b345-c6d7e8f9a012"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, email, name, role, created_at, updated_at FROM users ORDER BY created_at DESC",
+        "options": {}
+      },
+      "id": "d815bcd5-5838-42f0-898d-0b739864bdce",
+      "name": "Get All Users",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -1560,
+        560
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AcgPwRkrIpLhRPNV",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "PUT",
+        "path": "admin/user/{{ $parameter.id }}",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "86f92c45-6312-47a4-ba5d-687add8219ae",
+      "name": "Update User Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -2280,
+        760
+      ],
+      "webhookId": "e7f8a9b0-c1d2-4345-e678-f9a0b1c2d345"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verify admin token and extract user ID from path\nconst jwt = require('jsonwebtoken');\nconst secret = '23GP3dGQZyyHLQSOwJ9CEOTJ7YpMTrChbnwztDRI';\n\nconst authHeader = $input.first().json.headers.authorization;\nconst pathParts = $input.first().json.path.split('/');\nconst userId = pathParts[pathParts.length - 1];\n\nif (!authHeader || !authHeader.startsWith('Bearer ')) {\n  return [{\n    json: {\n      error: true,\n      status: 401,\n      message: 'Missing or invalid authorization header'\n    }\n  }];\n}\n\nconst token = authHeader.substring(7);\n\ntry {\n  const decoded = jwt.verify(token, secret);\n  \n  if (decoded.role !== 'admin') {\n    return [{\n      json: {\n        error: true,\n        status: 403,\n        message: 'Admin access required'\n      }\n    }];\n  }\n  \n  return [{\n    json: {\n      adminUserId: decoded.userId,\n      targetUserId: parseInt(userId),\n      updateData: $input.first().json.body\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      error: true,\n      status: 401,\n      message: 'Invalid or expired token'\n    }\n  }];\n}"
+      },
+      "id": "f6b66756-32f0-465a-886d-9eb2eb7346ed",
+      "name": "Verify Admin for Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2020,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE users SET name = COALESCE($1, name), role = COALESCE($2, role), updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING id, email, name, role, updated_at",
+        "options": {
+          "queryReplacement": "={{ $json.updateData.name }}, {{ $json.updateData.role }}, {{ $json.targetUserId }}"
+        }
+      },
+      "id": "a1a845f0-1bb3-4822-aa1c-116f6649bff5",
+      "name": "Update User Record",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -1800,
+        760
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AcgPwRkrIpLhRPNV",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "admin/delete-user/{{ $parameter.id }}",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "c0f9b004-d0ff-435f-aeaa-f016313f99c8",
+      "name": "Delete User Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -2280,
+        960
+      ],
+      "webhookId": "b0c1d2e3-f4a5-4678-b901-c2d3e4f5a678"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verify admin token and extract user ID from path\nconst jwt = require('jsonwebtoken');\nconst secret = '23GP3dGQZyyHLQSOwJ9CEOTJ7YpMTrChbnwztDRI';\n\nconst authHeader = $input.first().json.headers.authorization;\nconst pathParts = $input.first().json.path.split('/');\nconst userId = pathParts[pathParts.length - 1];\n\nif (!authHeader || !authHeader.startsWith('Bearer ')) {\n  return [{\n    json: {\n      error: true,\n      status: 401,\n      message: 'Missing or invalid authorization header'\n    }\n  }];\n}\n\nconst token = authHeader.substring(7);\n\ntry {\n  const decoded = jwt.verify(token, secret);\n  \n  if (decoded.role !== 'admin') {\n    return [{\n      json: {\n        error: true,\n        status: 403,\n        message: 'Admin access required'\n      }\n    }];\n  }\n  \n  return [{\n    json: {\n      adminUserId: decoded.userId,\n      targetUserId: parseInt(userId)\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      error: true,\n      status: 401,\n      message: 'Invalid or expired token'\n    }\n  }];\n}"
+      },
+      "id": "ddfb3b4f-54f0-4b2b-b13b-ee3d0f6289e5",
+      "name": "Verify Admin for Delete",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2080,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM users WHERE id = $1 AND id != $2 RETURNING id, email, name",
+        "options": {
+          "queryReplacement": "={{ $json.targetUserId }}, {{ $json.adminUserId }}"
+        }
+      },
+      "id": "43935374-00ed-4e5a-9fcd-e60b19b07ee6",
+      "name": "Delete User Record",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -1880,
+        960
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AcgPwRkrIpLhRPNV",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "admin/user/{{ $parameter.id }}/logs",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "31fb7de3-8c5e-4cf7-9f8f-003225b0fa22",
+      "name": "User Logs Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -2280,
+        1160
+      ],
+      "webhookId": "e3f4a5b6-c7d8-4901-e234-f5a6b7c8d901"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verify admin token and extract user ID from path\nconst jwt = require('jsonwebtoken');\nconst secret = '23GP3dGQZyyHLQSOwJ9CEOTJ7YpMTrChbnwztDRI';\n\nconst authHeader = $input.first().json.headers.authorization;\nconst pathParts = $input.first().json.path.split('/');\nconst userId = pathParts[pathParts.indexOf('user') + 1];\n\nif (!authHeader || !authHeader.startsWith('Bearer ')) {\n  return [{\n    json: {\n      error: true,\n      status: 401,\n      message: 'Missing or invalid authorization header'\n    }\n  }];\n}\n\nconst token = authHeader.substring(7);\n\ntry {\n  const decoded = jwt.verify(token, secret);\n  \n  if (decoded.role !== 'admin') {\n    return [{\n      json: {\n        error: true,\n        status: 403,\n        message: 'Admin access required'\n      }\n    }];\n  }\n  \n  return [{\n    json: {\n      adminUserId: decoded.userId,\n      targetUserId: parseInt(userId)\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      error: true,\n      status: 401,\n      message: 'Invalid or expired token'\n    }\n  }];\n}"
+      },
+      "id": "7a0e0215-ce21-4ed2-9cd0-c9380b562d7a",
+      "name": "Verify Admin for Logs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2080,
+        1160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT tl.id, tl.action, tl.timestamp, tl.break_duration, u.name, u.email FROM time_logs tl JOIN users u ON tl.user_id = u.id WHERE tl.user_id = $1 ORDER BY tl.timestamp DESC LIMIT 100",
+        "options": {
+          "queryReplacement": "={{ $json.targetUserId }}"
+        }
+      },
+      "id": "0897a4ec-63e0-4b4a-a43e-b96c28f6f38e",
+      "name": "Get User Logs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -1880,
+        1160
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AcgPwRkrIpLhRPNV",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format response based on input\nconst input = $input.first().json;\n\nif (input.error) {\n  $responseCode = input.status || 400;\n  return [{\n    json: {\n      success: false,\n      error: input.message || 'An error occurred'\n    }\n  }];\n}\n\n// Success response\nreturn [{\n  json: {\n    success: true,\n    data: input\n  }\n}];"
+      },
+      "id": "cc023200-aa93-49d0-abb7-017a5077ee40",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "9527d959-0009-4343-b33f-3c3f39925cbe",
+      "name": "Response User Register",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -1080,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "22dd3134-ed61-4559-a2ed-475d586366da",
+      "name": "Response Delete User",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -1680,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "d3c43ac8-f1db-439c-bcfc-61b98e71627a",
+      "name": "Response Update User",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -1560,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "3098056c-260b-4fbd-ad1e-66a0b1aa8dc4",
+      "name": "Response User Logs",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -1680,
+        1160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "1022e09a-1922-4248-ad06-0ea02e875f0e",
+      "name": "Response Time",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -1300,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "55fc0d7d-7cc7-4973-87b1-c4e702411d87",
+      "name": "Response Login",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "29646ca2-67b1-407b-a349-ef617fc7373e",
+      "name": "Response Admin",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -1080,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Hash password using bcrypt\nconst bcrypt = require('bcrypt');\nconst saltRounds = 12;\n\nconst hashedPassword = await bcrypt.hash($input.first().json.password, saltRounds);\n\nreturn [{\n  json: {\n    email: $input.first().json.email,\n    password: hashedPassword,\n    name: $input.first().json.name,\n    role: $input.first().json.role\n  }\n}];"
+      },
+      "id": "0e13ef41-789d-41d2-bcf4-b2e05af471d7",
+      "name": "Hash Password",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1800,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verify admin token\nconst jwt = require('jsonwebtoken');\nconst secret = '23GP3dGQZyyHLQSOwJ9CEOTJ7YpMTrChbnwztDRI';\n\nconst authHeader = $input.first().json.headers.authorization;\n\nif (!authHeader || !authHeader.startsWith('Bearer ')) {\n  return [{\n    json: {\n      error: true,\n      status: 401,\n      message: 'Missing or invalid authorization header'\n    }\n  }];\n}\n\nconst token = authHeader.substring(7);\n\ntry {\n  const decoded = jwt.verify(token, secret);\n  \n  if (decoded.role !== 'admin') {\n    return [{\n      json: {\n        error: true,\n        status: 403,\n        message: 'Admin access required'\n      }\n    }];\n  }\n  \n  return [{\n    json: {\n      userId: decoded.userId,\n      email: decoded.email,\n      role: decoded.role\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      error: true,\n      status: 401,\n      message: 'Invalid or expired token'\n    }\n  }];\n}"
+      },
+      "id": "274246d3-87e1-49f9-b88b-925acaf5510f",
+      "name": "Verify Admin Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2040,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notify-break-exceeded",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2280,
+        1380
+      ],
+      "id": "d006d8e2-176c-435f-97d1-a5cd83443536",
+      "name": "Webhook Notify Break Exceeded",
+      "webhookId": "463dd4de-f93e-4c4a-adc0-5f5a369060b0"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lateness-report",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2280,
+        1600
+      ],
+      "id": "97a21ccb-8828-4e78-b3ca-d89d7b386dcc",
+      "name": "Webhook Lateness report",
+      "webhookId": "463dd4de-f93e-4c4a-adc0-5f5a369060b0"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://acrm.site/rest/3183/3ajzc6qpuo5m8z37/im.message.add",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n    'DIALOG_ID': 'chat4008261',\n    'Message': 'Сотрудник {{ $json.body.userName }} опоздал. Точное время отметки: {{ $json.body.startTime }}'\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2060,
+        1380
+      ],
+      "id": "e1530438-a712-47f0-b5e0-6711c88af4c5",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://acrm.site/rest/3183/3ajzc6qpuo5m8z37/im.message.add",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "DIALOG_ID",
+              "value": "chat4008261"
+            },
+            {
+              "name": "Message",
+              "value": "=Сотрудник {{ $json.body.userName }} опоздал. Точное время отметки: {{ $json.body.startTime }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2060,
+        1600
+      ],
+      "id": "a3a3d7c3-7cf5-4e60-938a-e641e7506ee0",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "aacbf02c-aaa7-43f1-81ed-6efd109416d1",
+              "name": "inputPassword",
+              "value": "={{ $json.body.password }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2040,
+        160
+      ],
+      "id": "79629313-843a-4dd7-a79d-16096f0311d3",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c3547e59-02a1-4f7d-a775-cef157bad8ba",
+              "leftValue": "={{ $json.error === undefined }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1800,
+        360
+      ],
+      "id": "09faea2d-9cac-4614-b849-1defbc285792",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://gelding-able-sailfish.ngrok-free.app/webhook/register-user",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "flash@example.com"
+            },
+            {
+              "name": "password",
+              "value": "password123"
+            },
+            {
+              "name": "name",
+              "value": "Flash Ermagen"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2040,
+        -260
+      ],
+      "id": "79b4dc62-e95e-418a-b249-603bbdfd5b1a",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://gelding-able-sailfish.ngrok-free.app/webhook/register-user",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "userId",
+              "value": "2"
+            },
+            {
+              "name": "action",
+              "value": "start_work"
+            },
+            {
+              "name": "breakDuration",
+              "value": "1800"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1820,
+        -260
+      ],
+      "id": "22c7be60-7d27-404c-94ce-59634de5fa8a",
+      "name": "HTTP Request4"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1560,
+        160
+      ],
+      "id": "bacf990d-2876-4377-a462-85a2f63b8865",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7dffe573-ad75-4478-ab9a-4fbe3532c536",
+              "leftValue": "={{ $json.error === undefined }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1820,
+        560
+      ],
+      "id": "f763c65d-cf2b-45ab-8917-17f7f31ce1bb",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    success: true,\n    data: items.map(item => item.json)\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1300,
+        560
+      ],
+      "id": "3dc72055-b30c-4fa6-a91f-756758828a09",
+      "name": "Code"
+    }
+  ],
+  "connections": {
+    "Register User Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Registration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Registration": {
+      "main": [
+        [
+          {
+            "node": "Hash Password",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert User": {
+      "main": [
+        [
+          {
+            "node": "Generate JWT for Registration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate JWT for Registration": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Response User Register",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User by Email": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Password": {
+      "main": [
+        [
+          {
+            "node": "Generate JWT for Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate JWT for Login": {
+      "main": [
+        [
+          {
+            "node": "Response Login",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Time Action Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify JWT Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify JWT Token": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Time Action": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Response Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Admin Users Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Admin Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Users": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update User Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Admin for Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Admin for Update": {
+      "main": [
+        [
+          {
+            "node": "Update User Record",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update User Record": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Response Update User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete User Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Admin for Delete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Admin for Delete": {
+      "main": [
+        [
+          {
+            "node": "Delete User Record",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete User Record": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Response Delete User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "User Logs Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Admin for Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Admin for Logs": {
+      "main": [
+        [
+          {
+            "node": "Get User Logs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User Logs": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Response User Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Response Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hash Password": {
+      "main": [
+        [
+          {
+            "node": "Insert User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Admin Token": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Notify Break Exceeded": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Lateness report": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Get User by Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Log Time Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Verify Password",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Get All Users",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Response Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ec53cc9e4e3023ac07ebd41a9a887c8faafc290b2072c7feab38e82b0a4cdf2d"
+  }
+}
