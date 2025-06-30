@@ -138,8 +138,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       let newBreakStartTime;
       
       if (status === 'break') {
-        // Если уже на перерыве и это тот же день, сохраняем старое время
-        if (user.status === 'break' && user.breakStartTime) {
+        // Проверяем, был ли уже перерыв сегодня (независимо от текущего статуса)
+        if (user.breakStartTime) {
           const existingBreakDate = new Date(user.breakStartTime);
           const currentDate = new Date();
           
@@ -161,7 +161,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const updatedUser = { 
         ...user, 
         status, 
-        breakStartTime: status === 'break' ? newBreakStartTime : undefined 
+        breakStartTime: status === 'break' ? newBreakStartTime : user.breakStartTime // Сохраняем время перерыва даже при смене статуса
       };
       setUser(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
