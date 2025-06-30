@@ -1,4 +1,3 @@
-
 const API_BASE_URL = 'https://gelding-able-sailfish.ngrok-free.app/webhook';
 
 export interface LoginRequest {
@@ -86,59 +85,58 @@ class ApiClient {
     };
   }
 
+  // ОБНОВЛЕННАЯ ФУНКЦИЯ
   private async handleResponse(response: Response) {
-    console.log('API Response status:', response.status);
+    console.log(`[handleResponse] Status: ${response.status} for ${response.url}`);
     
-    // Handle specific error status codes
+    const responseText = await response.text();
+    console.log('[handleResponse] Raw text:', responseText);
+
     if (!response.ok) {
-      switch (response.status) {
-        case 401:
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          throw new AuthError('Session expired', 401);
-        case 403:
-          throw new AuthError('Insufficient permissions', 403);
-        case 422:
-          const errorData = await response.json().catch(() => ({}));
-          throw new ValidationError(errorData.error || 'Validation failed', 422);
-        case 500:
-          throw new Error('Server error occurred');
-        default:
-          const error = await response.text().catch(() => 'Unknown error');
-          throw new Error(`HTTP error! status: ${response.status}, message: ${error}`);
+      // Обработка HTTP ошибок (4xx, 5xx)
+      console.error('[handleResponse] HTTP error occurred!');
+      // Попытка извлечь сообщение об ошибке из JSON
+      try {
+        const errorJson = JSON.parse(responseText);
+        const message = errorJson.message || errorJson.error || 'Unknown server error';
+        if (response.status === 401) throw new AuthError(message, 401);
+        if (response.status === 403) throw new AuthError(message, 403);
+        throw new Error(message);
+      } catch (e) {
+        // Если это не JSON или ошибка другого типа, возвращаем как есть
+        if (e instanceof AuthError) throw e;
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     }
     
-    // Parse response text
-    const text = await response.text();
-    console.log('Raw response:', text);
-    
-    if (!text) {
+    // Если ответ пустой (например, при DELETE запросе), возвращаем пустой объект
+    if (!responseText) {
+      console.log('[handleResponse] Response is empty, returning { success: true }.');
       return { success: true };
     }
     
+    // Пытаемся распарсить ответ как JSON
     try {
-      const jsonData = JSON.parse(text);
-      console.log('Parsed response:', jsonData);
+      const jsonData = JSON.parse(responseText);
+      console.log('[handleResponse] Parsed JSON:', jsonData);
       
-      // Handle error responses
+      // Обработка логических ошибок (когда HTTP статус 200, но success: false)
       if (jsonData.success === false) {
+        console.error('[handleResponse] Logical error in response:', jsonData.error);
         throw new Error(jsonData.error || 'Request failed');
       }
       
       return jsonData;
     } catch (parseError) {
       if (parseError instanceof Error && parseError.message !== 'Request failed') {
-        console.error('Failed to parse JSON:', text);
-        throw new Error('Invalid JSON response');
+        console.error('[handleResponse] Failed to parse JSON!', parseError);
+        throw new Error('Invalid JSON response from server');
       }
-      throw parseError;
+      throw parseError; // Перебрасываем логическую ошибку
     }
   }
 
   async register(data: RegisterRequest): Promise<RegisterResponse> {
-    console.log('Register request:', data);
-    
     const response = await fetch(`${API_BASE_URL}/register-user`, {
       method: 'POST',
       headers: {
@@ -149,32 +147,10 @@ class ApiClient {
     });
 
     const result = await this.handleResponse(response);
-    
-    // Handle both direct and wrapped responses
-    if (result.success && result.data) {
-      // Wrapped format: {success: true, data: {user, token, message}}
-      return {
-        success: true,
-        data: result.data
-      };
-    } else if (result.success && result.user && result.token) {
-      // Direct format: {success: true, user, token, message}
-      return {
-        success: true,
-        data: {
-          message: result.message || 'Registration successful',
-          user: result.user,
-          token: result.token
-        }
-      };
-    }
-    
-    throw new Error('Invalid registration response format');
+    return result as RegisterResponse;
   }
 
   async login(data: LoginRequest): Promise<LoginResponse> {
-    console.log('Login request:', data);
-    
     const response = await fetch(`${API_BASE_URL}/login`, {
       method: 'POST',
       headers: {
@@ -186,29 +162,17 @@ class ApiClient {
 
     const result = await this.handleResponse(response);
     
-    // Handle wrapped response format: {success: true, data: {user, token, message}}
     if (result.success && result.data) {
-      // Store token and user data
       localStorage.setItem('token', result.data.token);
       localStorage.setItem('user', JSON.stringify(result.data.user));
-      
-      return {
-        success: true,
-        data: result.data
-      };
     }
     
-    throw new Error('Invalid login response format');
+    return result as LoginResponse;
   }
 
   async timeAction(data: TimeActionRequest) {
-    console.log('Sending time action request:', data);
+    const requestBody: any = { action: data.action };
     
-    const requestBody: any = {
-      action: data.action
-    };
-    
-    // Add break_duration for break-related actions
     if (data.break_duration !== undefined && (data.action === 'end_break' || data.action === 'start_break')) {
       requestBody.break_duration = data.break_duration;
     }
@@ -219,53 +183,36 @@ class ApiClient {
       body: JSON.stringify(requestBody)
     });
 
-    const result = await this.handleResponse(response);
-    
-    // Handle wrapped response format
-    if (result.success && result.data) {
-      return result.data;
-    }
-    
-    return result;
+    return this.handleResponse(response);
   }
 
+  // ОБНОВЛЕННАЯ ФУНКЦИЯ
   async getAllUsers(): Promise<User[]> {
-    // 1. Отправляем запрос на сервер для получения списка пользователей
+    console.log('[getAllUsers] Fetching users...');
     const response = await fetch(`${API_BASE_URL}/admin/users`, {
       method: 'GET',
       headers: this.getAuthHeaders()
     });
 
-    // 2. Обрабатываем ответ с помощью нашего универсального обработчика
     const result = await this.handleResponse(response);
-    console.log('getAllUsers API response:', result);
 
     let usersData: any[] = [];
 
-    // 3. Проверяем наиболее вероятные форматы ответа от API
-    
-    // Вариант А: Ответ обернут в объект { success: true, data: [...] }
-    if (result && result.success && Array.isArray(result.data)) {
-      usersData = result.data;
-    } 
-    // Вариант Б: Ответ обернут в объект { success: true, data: { users: [...] } }
-    else if (result && result.success && result.data && Array.isArray(result.data.users)) {
-      usersData = result.data.users;
-    }
-    // Вариант В: API возвращает просто массив пользователей [...]
-    else if (Array.isArray(result)) {
+    // Ваш n8n возвращает чистый массив. Это основная ветка.
+    if (Array.isArray(result)) {
+      console.log('[getAllUsers] Received a direct array of users.');
       usersData = result;
     } 
-    // 4. Если формат ответа неизвестен, выбрасываем ошибку
-    else {
-      console.error('Неожиданный формат ответа от API для списка пользователей:', result);
-      // Вместо возврата пустого массива или тестовых данных, лучше сообщить об ошибке.
-      // Это поможет быстрее найти проблему, если бэкенд изменит формат ответа.
-      throw new Error('Не удалось получить список пользователей: неверный формат ответа от сервера.');
+    // Запасной вариант, если n8n вдруг вернет обертку { success: true, data: [...] }
+    else if (result && result.success && Array.isArray(result.data)) {
+      console.log('[getAllUsers] Received a wrapped array { success, data }');
+      usersData = result.data;
+    } else {
+      console.error('[getAllUsers] Unexpected data structure:', result);
+      throw new Error('Получена неожиданная структура данных от сервера.');
     }
-
-    // 5. Преобразуем (нормализуем) полученные данные в наш тип `User`
-    // Этот код полезен, т.к. он обрабатывает разные имена полей (например, id vs userId)
+    
+    // Преобразуем данные в наш формат User
     return usersData.map(user => ({
       id: user.id || user.userId,
       email: user.email,
@@ -280,7 +227,6 @@ class ApiClient {
     if (!email) return 'Неизвестный пользователь';
     
     const localPart = email.split('@')[0];
-    // Пытаемся красиво отформатировать имя из email
     return localPart
       .split(/[._-]/)
       .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
@@ -293,14 +239,7 @@ class ApiClient {
       headers: this.getAuthHeaders(),
       body: JSON.stringify(data)
     });
-
-    const result = await this.handleResponse(response);
-    
-    if (result.success && result.data) {
-      return result.data;
-    }
-    
-    return result;
+    return this.handleResponse(response);
   }
 
   async deleteUser(userId: number) {
@@ -308,14 +247,7 @@ class ApiClient {
       method: 'DELETE',
       headers: this.getAuthHeaders()
     });
-
-    const result = await this.handleResponse(response);
-    
-    if (result.success && result.data) {
-      return result.data;
-    }
-    
-    return result;
+    return this.handleResponse(response);
   }
 
   async getUserLogs(userId: number): Promise<UserLog[]> {
@@ -323,17 +255,8 @@ class ApiClient {
       method: 'GET',
       headers: this.getAuthHeaders()
     });
-
     const result = await this.handleResponse(response);
-    
-    // Handle both wrapped and direct formats
-    if (result.success && result.data) {
-      return Array.isArray(result.data) ? result.data : [];
-    } else if (Array.isArray(result)) {
-      return result;
-    }
-    
-    return [];
+    return Array.isArray(result) ? result : []; // Упрощенная обработка
   }
 
   async notifyBreakExceeded(data: { userId: number; userName: string; userEmail: string; breakDurationMinutes: number }) {
@@ -342,7 +265,6 @@ class ApiClient {
       headers: this.getAuthHeaders(),
       body: JSON.stringify(data)
     });
-
     return this.handleResponse(response);
   }
 
@@ -352,7 +274,6 @@ class ApiClient {
       headers: this.getAuthHeaders(),
       body: JSON.stringify(data)
     });
-
     return this.handleResponse(response);
   }
 
