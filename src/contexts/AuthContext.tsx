@@ -135,10 +135,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const updateUserStatus = (status: 'working' | 'break' | 'offline', breakStartTime?: string) => {
     if (user) {
+      let newBreakStartTime;
+      
+      if (status === 'break') {
+        // Если уже на перерыве и это тот же день, сохраняем старое время
+        if (user.status === 'break' && user.breakStartTime) {
+          const existingBreakDate = new Date(user.breakStartTime);
+          const currentDate = new Date();
+          
+          // Проверяем, тот ли это день (год, месяц, день)
+          const isSameDay = existingBreakDate.getFullYear() === currentDate.getFullYear() &&
+                           existingBreakDate.getMonth() === currentDate.getMonth() &&
+                           existingBreakDate.getDate() === currentDate.getDate();
+          
+          if (isSameDay) {
+            newBreakStartTime = user.breakStartTime; // Сохраняем существующее время
+          } else {
+            newBreakStartTime = breakStartTime || new Date().toISOString(); // Новый день, новое время
+          }
+        } else {
+          newBreakStartTime = breakStartTime || new Date().toISOString(); // Первый перерыв
+        }
+      }
+      
       const updatedUser = { 
         ...user, 
         status, 
-        breakStartTime: status === 'break' ? breakStartTime || new Date().toISOString() : undefined 
+        breakStartTime: status === 'break' ? newBreakStartTime : undefined 
       };
       setUser(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
