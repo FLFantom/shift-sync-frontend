@@ -153,31 +153,30 @@ class ApiClient {
   }
 
   // ФИНАЛЬНАЯ, ЧИСТАЯ ВЕРСИЯ
-  async getAllUsers(): Promise<User[]> {
-    console.log('[getAllUsers] Fetching users...');
-    const result = await makeApiRequest<any>(`${API_BASE_URL}/admin/users`, {
-      method: 'GET',
-      headers: this.getAuthHeaders(),
-    });
-    
-    // Ожидаем ТОЛЬКО массив. Если это не массив - это ошибка.
-    if (!Array.isArray(result)) {
-      console.error('[getAllUsers] Ошибка: API не вернул массив пользователей. Получено:', result);
-      throw new Error('Сервер вернул некорректные данные (ожидался массив).');
-    }
-    
-    console.log(`[getAllUsers] Получен массив из ${result.length} пользователей.`);
-    
-    // Нормализуем данные
-    return result.map((user: any) => ({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        status: user.status || 'offline',
-        breakStartTime: user.breakStartTime
-    }));
+async getAllUsers(): Promise<User[]> {
+  console.log('[getAllUsers] Fetching users...');
+  const result = await makeApiRequest<any>(`${API_BASE_URL}/admin/users`, {
+    method: 'GET',
+    headers: this.getAuthHeaders(),
+  });
+
+  if (!Array.isArray(result.data)) {
+    console.error('[getAllUsers] Ошибка: API не вернул массив пользователей. Получено:', result);
+    throw new Error('Сервер вернул некорректные данные (ожидался массив в result.data).');
   }
+
+  console.log(`[getAllUsers] Получен массив из ${result.data.length} пользователей.`);
+
+  return result.data.map((user: any) => ({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    status: user.status || 'offline',
+    breakStartTime: user.breakStartTime
+  }));
+}
+
 
   async updateUser(userId: number, data: { name: string; role: string }): Promise<any> {
     return makeApiRequest(`${API_BASE_URL}/admin/user/${userId}`, {
