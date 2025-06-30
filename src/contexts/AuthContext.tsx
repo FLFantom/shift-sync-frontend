@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../lib/api';
 
@@ -53,23 +54,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         status
       };
       
-      // Правильно обрабатываем время начала перерыва
+      // Логика управления временем перерыва
       if (status === 'break') {
-        // Если передано время начала перерыва, используем его
+        // Если это новый перерыв и передано время начала
         if (breakStartTime) {
           updatedUser.breakStartTime = breakStartTime;
         }
-        // Если время не передано, но пользователь уже был на перерыве, сохраняем старое время
+        // Если пользователь уже был на перерыве и возвращается с паузы,
+        // сохраняем старое время начала перерыва
         else if (prevUser.status === 'break' && prevUser.breakStartTime) {
           updatedUser.breakStartTime = prevUser.breakStartTime;
         }
-        // Если это новый перерыв, устанавливаем текущее время
-        else {
-          updatedUser.breakStartTime = new Date().toISOString();
+        // Если пользователь переходит в перерыв впервые за день
+        else if (prevUser.status !== 'break') {
+          // Проверяем, есть ли сохраненное время перерыва за сегодня
+          const savedBreakTime = localStorage.getItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`);
+          if (savedBreakTime) {
+            // Если есть сохраненное время за сегодня, используем его
+            updatedUser.breakStartTime = savedBreakTime;
+          } else {
+            // Если нет сохраненного времени, устанавливаем текущее время
+            const newBreakTime = new Date().toISOString();
+            updatedUser.breakStartTime = newBreakTime;
+            // Сохраняем время начала перерыва за сегодня
+            localStorage.setItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`, newBreakTime);
+          }
         }
+      } else if (status === 'working') {
+        // Когда пользователь возвращается к работе, не удаляем время перерыва
+        // Это позволит продолжить отсчет при следующем перерыве
+        // Время перерыва будет очищено только в начале нового дня
+        if (prevUser.breakStartTime) {
+          // Сохраняем время перерыва для возможного продолжения
+          localStorage.setItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`, prevUser.breakStartTime);
+        }
+        updatedUser.breakStartTime = prevUser.breakStartTime; // Сохраняем время
       } else {
-        // Если статус не "break", очищаем время начала перерыва
-        updatedUser.breakStartTime = undefined;
+        // Для статуса 'offline' также сохраняем время перерыва
+        updatedUser.breakStartTime = prevUser.breakStartTime;
       }
       
       // Сохраняем обновленного пользователя в localStorage
@@ -78,6 +100,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updatedUser;
     });
   };
+
+  // Очистка времени перерыва в начале нового дня
+  useEffect(() => {
+    const checkNewDay = () => {
+      const today = new Date().toDateString();
+      const lastCheck = localStorage.getItem('lastDayCheck');
+      
+      if (lastCheck !== today) {
+        // Новый день - очищаем все сохраненные времена перерывов
+        const keys = Object.keys(localStorage);
+        keys.forEach(key => {
+          if (key.startsWith('breakStartTime_')) {
+            localStorage.removeItem(key);
+          }
+        });
+        
+        // Обновляем пользователя, очищая время перерыва
+        setUser(prevUser => {
+          if (prevUser && prevUser.breakStartTime) {
+            const updatedUser = {
+              ...prevUser,
+              breakStartTime: undefined,
+              status: 'offline' as const
+            };
+            localStorage.setItem('user', JSON.stringify(updatedUser));
+            return updatedUser;
+          }
+          return prevUser;
+        });
+        
+        localStorage.setItem('lastDayCheck', today);
+      }
+    };
+
+    // Проверяем при загрузке
+    checkNewDay();
+    
+    // Проверяем каждую минуту
+    const interval = setInterval(checkNewDay, 60000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSetUser = (newUser: User | null) => {
     setUser(newUser);
