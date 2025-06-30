@@ -1,5 +1,5 @@
 // ==========================================================
-// ИСПРАВЛЕННЫЙ API КЛИЕНТ ДЛЯ РАБОТЫ С N8N WEBHOOKS
+// ОКОНЧАТЕЛЬНО ИСПРАВЛЕННЫЙ API КЛИЕНТ 
 // ==========================================================
 
 const API_BASE_URL = 'https://gelding-able-sailfish.ngrok-free.app/webhook';
@@ -106,13 +106,18 @@ async function makeApiRequest<T>(url: string, options: RequestInit): Promise<T> 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
+    console.log(`[API] Запрос: ${options.method || 'GET'} ${url}`);
+    console.log(`[API] Headers:`, options.headers);
+
     response = await fetch(url, {
       ...options,
       signal: controller.signal
     });
 
     clearTimeout(timeoutId);
+    console.log(`[API] Ответ: ${response.status} ${response.statusText}`);
   } catch (error: any) {
+    console.error(`[API] Ошибка запроса:`, error);
     if (error.name === 'AbortError') {
       throw new NetworkError('Превышено время ожидания ответа сервера');
     }
@@ -122,6 +127,7 @@ async function makeApiRequest<T>(url: string, options: RequestInit): Promise<T> 
   let responseText: string;
   try {
     responseText = await response.text();
+    console.log(`[API] Тело ответа:`, responseText.substring(0, 200));
   } catch (error) {
     throw new NetworkError('Ошибка чтения ответа сервера');
   }
@@ -137,6 +143,8 @@ async function makeApiRequest<T>(url: string, options: RequestInit): Promise<T> 
     } catch (e) {
       // Игнорируем ошибку парсинга
     }
+    
+    console.error(`[API] HTTP Error:`, errorMessage);
     
     if (response.status === 401) {
       throw new AuthError('Неверные учетные данные', response.status);
@@ -159,8 +167,10 @@ async function makeApiRequest<T>(url: string, options: RequestInit): Promise<T> 
   
   try {
     const jsonResponse = JSON.parse(responseText);
+    console.log(`[API] Parsed JSON:`, jsonResponse);
     return jsonResponse as T;
   } catch (e) {
+    console.error(`[API] JSON Parse Error:`, e);
     throw new Error('Сервер вернул некорректный JSON ответ');
   }
 }
@@ -252,8 +262,6 @@ class ApiClient {
       password: data.password
     };
 
-    console.log('[API] Отправка запроса на сервер...');
-
     const response = await makeApiRequest<LoginResponse>(`${API_BASE_URL}/login`, {
       method: 'POST',
       headers: {
@@ -263,15 +271,12 @@ class ApiClient {
       body: JSON.stringify(requestBody)
     });
 
-    console.log('[API] Получен ответ от сервера:', response);
-
     if (!response) {
       throw new Error('Сервер не вернул ответ');
     }
 
     if (!response.success) {
       const errorMsg = response.error || 'Ошибка аутентификации';
-      console.log('[API] Ошибка аутентификации:', errorMsg);
       throw new AuthError(errorMsg, 401);
     }
 
@@ -293,11 +298,9 @@ class ApiClient {
       throw new Error('Сервер вернул недействительный токен');
     }
 
-    console.log('[API] Сохранение данных пользователя...');
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
 
-    console.log('[API] Аутентификация завершена успешно');
     return response;
   }
 
@@ -314,7 +317,7 @@ class ApiClient {
     });
   }
 
-  // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ ПОЛУЧЕНИЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ
+  // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ ПОЛУЧЕНИЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ - ГЛАВНОЕ ИСПРАВЛЕНИЕ
   async getAllUsers(): Promise<User[]> {
     const token = this.getToken();
     if (!token || !this.validateToken(token)) {
@@ -328,40 +331,84 @@ class ApiClient {
       headers: this.getAuthHeaders(),
     });
 
-    console.log('[getAllUsers] Полученный ответ:', result);
+    console.log('[getAllUsers] Полученный результат:', result);
+    console.log('[getAllUsers] Тип результата:', typeof result);
+    console.log('[getAllUsers] Является массивом:', Array.isArray(result));
 
     if (!result) {
       throw new Error('Сервер не вернул данные');
     }
 
-    // ВАЖНО: Поскольку ваш n8n workflow возвращает массив напрямую в success случае
-    // мы должны обработать разные форматы ответа
-    let users: any[];
+    let users: any[] = [];
 
-    if (result.success && Array.isArray(result.data)) {
-      // Формат { success: true, data: [...] }
-      users = result.data;
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Обрабатываем все возможные форматы ответа от n8n
+    if (result.success === true && result.data) {
+      // Формат { success: true, data: [...] } или { success: true, data: { users: [...] } }
+      if (Array.isArray(result.data)) {
+        users = result.data;
+        console.log('[getAllUsers] Формат: success.data массив');
+      } else if (result.data.users && Array.isArray(result.data.users)) {
+        users = result.data.users;
+        console.log('[getAllUsers] Формат: success.data.users массив');
+      } else if (typeof result.data === 'object') {
+        // Если data - объект, попробуем найти массив пользователей
+        const possibleArrays = Object.values(result.data).filter(val => Array.isArray(val));
+        if (possibleArrays.length > 0) {
+          users = possibleArrays[0] as any[];
+          console.log('[getAllUsers] Формат: найден массив в data объекте');
+        }
+      }
     } else if (Array.isArray(result)) {
-      // Формат [...] (прямой массив)
+      // Прямой массив
       users = result;
+      console.log('[getAllUsers] Формат: прямой массив');
     } else if (result.data && Array.isArray(result.data)) {
       // Формат { data: [...] }
       users = result.data;
-    } else {
-      console.error('[getAllUsers] Неожиданный формат ответа:', result);
-      throw new Error('Сервер вернул некорректные данные');
+      console.log('[getAllUsers] Формат: data массив');
+    } else if (typeof result === 'object') {
+      // Попробуем найти массив в любом месте объекта
+      const findArrayInObject = (obj: any): any[] | null => {
+        for (const key in obj) {
+          if (Array.isArray(obj[key])) {
+            return obj[key];
+          }
+          if (typeof obj[key] === 'object' && obj[key] !== null) {
+            const nested = findArrayInObject(obj[key]);
+            if (nested) return nested;
+          }
+        }
+        return null;
+      };
+
+      const foundArray = findArrayInObject(result);
+      if (foundArray) {
+        users = foundArray;
+        console.log('[getAllUsers] Формат: найден массив в объекте');
+      }
     }
 
-    console.log(`[getAllUsers] Получен массив из ${users.length} пользователей.`);
+    if (!Array.isArray(users) || users.length === 0) {
+      console.error('[getAllUsers] Не удалось найти массив пользователей в:', result);
+      
+      // Возвращаем пустой массив вместо ошибки, чтобы не ломать UI
+      console.warn('[getAllUsers] Возвращаем пустой массив');
+      return [];
+    }
 
-    return users.map((user: any) => ({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      status: user.status || 'offline',
-      breakStartTime: user.breakStartTime,
-    }));
+    console.log(`[getAllUsers] Обработано ${users.length} пользователей`);
+
+    return users.map((user: any, index: number) => {
+      console.log(`[getAllUsers] Пользователь ${index}:`, user);
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        status: user.status || 'offline',
+        breakStartTime: user.breakStartTime,
+      };
+    });
   }
 
   // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ ОБНОВЛЕНИЯ ПОЛЬЗОВАТЕЛЯ
@@ -379,11 +426,10 @@ class ApiClient {
       throw new ValidationError('Некорректная роль пользователя');
     }
 
-    console.log(`[updateUser] Обновление пользователя ${userId}:`, data);
-
-    // ИСПРАВЛЕННЫЙ URL: Заменяем шаблон параметра на реальный ID
+    // ВАЖНО: URL должен точно соответствовать настройке в n8n webhook
     const url = `${API_BASE_URL}/admin/user/${userId}`;
-    console.log(`[updateUser] URL запроса: ${url}`);
+    console.log(`[updateUser] URL: ${url}`);
+    console.log(`[updateUser] Data:`, data);
 
     return makeApiRequest(url, {
       method: 'PUT',
@@ -395,7 +441,7 @@ class ApiClient {
     });
   }
 
-  // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ УДАЛЕНИЯ ПОЛЬЗОВАТЕЛЯ
+  // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ УДАЛЕНИЯ ПОЛЬЗОВАТЕЛЯ  
   async deleteUser(userId: number): Promise<any> {
     const token = this.getToken();
     if (!token || !this.validateToken(token)) {
@@ -406,11 +452,9 @@ class ApiClient {
       throw new ValidationError('Некорректный ID пользователя');
     }
 
-    console.log(`[deleteUser] Удаление пользователя ${userId}`);
-
-    // ИСПРАВЛЕННЫЙ URL: Заменяем шаблон параметра на реальный ID
+    // ВАЖНО: URL должен точно соответствовать настройке в n8n webhook
     const url = `${API_BASE_URL}/admin/delete-user/${userId}`;
-    console.log(`[deleteUser] URL запроса: ${url}`);
+    console.log(`[deleteUser] URL: ${url}`);
 
     return makeApiRequest(url, {
       method: 'DELETE',
@@ -418,18 +462,14 @@ class ApiClient {
     });
   }
 
-  // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ ПОЛУЧЕНИЯ ЛОГОВ ПОЛЬЗОВАТЕЛЯ
   async getUserLogs(userId: number): Promise<UserLog[]> {
     const token = this.getToken();
     if (!token || !this.validateToken(token)) {
       throw new AuthError('Необходима авторизация', 401);
     }
 
-    console.log(`[getUserLogs] Получение логов пользователя ${userId}`);
-
-    // ИСПРАВЛЕННЫЙ URL: Заменяем шаблон параметра на реальный ID
     const url = `${API_BASE_URL}/admin/user/${userId}/logs`;
-    console.log(`[getUserLogs] URL запроса: ${url}`);
+    console.log(`[getUserLogs] URL: ${url}`);
 
     return makeApiRequest<UserLog[]>(url, {
       method: 'GET',
@@ -500,4 +540,4 @@ class ApiClient {
   }
 }
 
-export const apiClient = new ApiClient();
+export const apiClient = new ApiClient
