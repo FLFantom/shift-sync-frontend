@@ -174,7 +174,7 @@ const getStatusBadge = (status: string) => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-green-100 text-sm font-medium">На работе</p>
-                    <p className="text-3xl font-bold">{employees.filter(e => e.status === 'working').length}</p>
+                    <p className="text-3xl font-bold">{employees.filter(e => e.status?.toLowerCase() === 'working').length}</p>
                   </div>
                   <Users className="w-12 h-12 text-green-200" />
                 </div>
@@ -185,7 +185,7 @@ const getStatusBadge = (status: string) => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-orange-100 text-sm font-medium">На перерыве</p>
-                    <p className="text-3xl font-bold">{employees.filter(e => e.status === 'break').length}</p>
+                    <p className="text-3xl font-bold">{employees.filter(e => e.status?.toLowerCase() === 'break').length}</p>
                   </div>
                   <Users className="w-12 h-12 text-orange-200" />
                 </div>
@@ -196,7 +196,7 @@ const getStatusBadge = (status: string) => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-100 text-sm font-medium">Не в сети</p>
-                    <p className="text-3xl font-bold">{employees.filter(e => e.status === 'offline' || !e.status).length}</p>
+                    <p className="text-3xl font-bold">{employees.filter(e => !e.status || e.status.toLowerCase() === 'offline').length}</p>
                   </div>
                   <Users className="w-12 h-12 text-gray-200" />
                 </div>
