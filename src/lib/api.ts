@@ -230,132 +230,50 @@ class ApiClient {
   }
 
   async getAllUsers(): Promise<User[]> {
+    // 1. Отправляем запрос на сервер для получения списка пользователей
     const response = await fetch(`${API_BASE_URL}/admin/users`, {
       method: 'GET',
       headers: this.getAuthHeaders()
     });
 
+    // 2. Обрабатываем ответ с помощью нашего универсального обработчика
     const result = await this.handleResponse(response);
     console.log('getAllUsers API response:', result);
+
+    let usersData: any[] = [];
+
+    // 3. Проверяем наиболее вероятные форматы ответа от API
     
-    // Если это массив пользователей, возвращаем его
-    if (Array.isArray(result)) {
-      return result.map(user => ({
-        id: user.id || user.userId,
-        email: user.email,
-        name: user.name || user.fullName || this.extractNameFromEmail(user.email),
-        role: user.role || 'user',
-        status: user.status || 'offline',
-        breakStartTime: user.breakStartTime
-      }));
+    // Вариант А: Ответ обернут в объект { success: true, data: [...] }
+    if (result && result.success && Array.isArray(result.data)) {
+      usersData = result.data;
+    } 
+    // Вариант Б: Ответ обернут в объект { success: true, data: { users: [...] } }
+    else if (result && result.success && result.data && Array.isArray(result.data.users)) {
+      usersData = result.data.users;
     }
-    
-    // Если обернуто в success и data содержит массив
-    if (result.success && Array.isArray(result.data)) {
-      return result.data.map(user => ({
-        id: user.id || user.userId,
-        email: user.email,
-        name: user.name || user.fullName || this.extractNameFromEmail(user.email),
-        role: user.role || 'user',
-        status: user.status || 'offline',
-        breakStartTime: user.breakStartTime
-      }));
+    // Вариант В: API возвращает просто массив пользователей [...]
+    else if (Array.isArray(result)) {
+      usersData = result;
+    } 
+    // 4. Если формат ответа неизвестен, выбрасываем ошибку
+    else {
+      console.error('Неожиданный формат ответа от API для списка пользователей:', result);
+      // Вместо возврата пустого массива или тестовых данных, лучше сообщить об ошибке.
+      // Это поможет быстрее найти проблему, если бэкенд изменит формат ответа.
+      throw new Error('Не удалось получить список пользователей: неверный формат ответа от сервера.');
     }
-    
-    // Если обернуто в success и data содержит объект с пользователями
-    if (result.success && result.data && typeof result.data === 'object') {
-      // Если data.users существует и это массив
-      if (Array.isArray(result.data.users)) {
-        return result.data.users.map(user => ({
-          id: user.id || user.userId,
-          email: user.email,
-          name: user.name || user.fullName || this.extractNameFromEmail(user.email),
-          role: user.role || 'user',
-          status: user.status || 'offline',
-          breakStartTime: user.breakStartTime
-        }));
-      }
-      
-      // Если data содержит отдельного пользователя, но нужен список всех
-      // В этом случае API возможно возвращает только текущего пользователя
-      // Попробуем создать фиктивных пользователей для демонстрации
-      const currentUser = {
-        id: result.data.userId || result.data.id,
-        email: result.data.email,
-        name: result.data.name || result.data.fullName || this.extractNameFromEmail(result.data.email),
-        role: result.data.role || 'user',
-        status: result.data.status || 'offline',
-        breakStartTime: result.data.breakStartTime
-      };
-      
-      // Добавляем тестовых пользователей, если API возвращает только одного
-      const mockUsers = [
-        currentUser,
-        {
-          id: 3,
-          email: 'alice@example.com',
-          name: 'Alice Johnson',
-          role: 'user' as const,
-          status: 'working' as const,
-          breakStartTime: undefined
-        },
-        {
-          id: 4,
-          email: 'bob@example.com',
-          name: 'Bob Smith',
-          role: 'user' as const,
-          status: 'break' as const,
-          breakStartTime: new Date(Date.now() - 15 * 60 * 1000).toISOString() // 15 минут назад
-        },
-        {
-          id: 5,
-          email: 'carol@example.com',
-          name: 'Carol Davis',
-          role: 'user' as const,
-          status: 'offline' as const,
-          breakStartTime: undefined
-        }
-      ];
-      
-      return mockUsers;
-    }
-    
-    // Если данные пользователя находятся на верхнем уровне result
-    if (result.userId || result.id) {
-      const currentUser = {
-        id: result.userId || result.id,
-        email: result.email,
-        name: result.name || result.fullName || this.extractNameFromEmail(result.email),
-        role: result.role || 'user',
-        status: result.status || 'offline',
-        breakStartTime: result.breakStartTime
-      };
-      
-      // Возвращаем с тестовыми данными
-      return [
-        currentUser,
-        {
-          id: 3,
-          email: 'alice@example.com',
-          name: 'Alice Johnson',
-          role: 'user' as const,
-          status: 'working' as const,
-          breakStartTime: undefined
-        },
-        {
-          id: 4,
-          email: 'bob@example.com',
-          name: 'Bob Smith',
-          role: 'user' as const,
-          status: 'break' as const,
-          breakStartTime: new Date(Date.now() - 25 * 60 * 1000).toISOString() // 25 минут назад
-        }
-      ];
-    }
-    
-    // Если ничего не найдено, возвращаем пустой массив
-    console.warn('API не возвращает список пользователей, возвращаем пустой массив');
-    return [];
+
+    // 5. Преобразуем (нормализуем) полученные данные в наш тип `User`
+    // Этот код полезен, т.к. он обрабатывает разные имена полей (например, id vs userId)
+    return usersData.map(user => ({
+      id: user.id || user.userId,
+      email: user.email,
+      name: user.name || user.fullName || this.extractNameFromEmail(user.email),
+      role: user.role || 'user',
+      status: user.status || 'offline',
+      breakStartTime: user.breakStartTime
+    }));
   }
 
   private extractNameFromEmail(email: string): string {
