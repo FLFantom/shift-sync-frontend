@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,8 +15,20 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isMobile, setIsMobile] = useState(false);
-  const { setUser, setToken } = useAuth();
+  const { setUser, setToken, user } = useAuth();
   const navigate = useNavigate();
+
+  // Проверяем, авторизован ли пользователь
+  useEffect(() => {
+    if (user && !loading) {
+      // Перенаправляем уже авторизованного пользователя
+      if (user.role === 'admin') {
+        navigate('/admin-panel');
+      } else {
+        navigate('/dashboard');
+      }
+    }
+  }, [user, navigate, loading]);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -32,40 +43,128 @@ const Login = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  const validateInput = () => {
+    if (!email.trim()) {
+      setError('Email обязателен для заполнения');
+      return false;
+    }
+
+    if (!password) {
+      setError('Пароль обязателен для заполнения');
+      return false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError('Введите корректный email адрес');
+      return false;
+    }
+
+    if (password.length < 3) {
+      setError('Пароль должен содержать минимум 3 символа');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+
+    // Валидация на клиенте
+    if (!validateInput()) {
+      return;
+    }
+
+    setLoading(true);
     
     try {
-      const response = await apiClient.login({ email, password });
+      console.log('Attempting login with:', { email: email.trim() });
       
-      if (response.success && response.data) {
-        setUser(response.data.user);
-        setToken(response.data.token);
-        
-        // Redirect based on user role
-        if (response.data.user.role === 'admin') {
-          navigate('/admin-panel');
-        } else {
-          navigate('/dashboard');
-        }
-        
-        toast({
-          title: "Успешный вход",
-          description: `Добро пожаловать, ${response.data.user.name}!`,
-        });
-      } else {
-        setError('Неверный формат ответа от сервера');
+      const response = await apiClient.login({ 
+        email: email.trim().toLowerCase(), 
+        password: password 
+      });
+
+      console.log('Login response:', response);
+
+      // КРИТИЧЕСКИ ВАЖНАЯ ПРОВЕРКА ОТВЕТА СЕРВЕРА
+      if (!response) {
+        throw new Error('Нет ответа от сервера');
       }
+
+      if (!response.success) {
+        throw new Error(response.error || 'Ошибка аутентификации');
+      }
+
+      if (!response.data) {
+        throw new Error('Сервер не вернул данные пользователя');
+      }
+
+      const { user: userData, token } = response.data;
+
+      // Проверяем обязательные поля пользователя
+      if (!userData || !userData.id || !userData.email || !userData.name || !userData.role) {
+        throw new Error('Некорректные данные пользователя от сервера');
+      }
+
+      if (!token) {
+        throw new Error('Сервер не вернул токен авторизации');
+      }
+
+      // ВСЁ ПРОВЕРИЛИ - ТЕПЕРЬ СОХРАНЯЕМ
+      console.log('Login successful, user data:', userData);
+      
+      setUser(userData);
+      setToken(token);
+      
+      // Очищаем форму
+      setEmail('');
+      setPassword('');
+      
+      // Показываем успешное уведомление
+      toast({
+        title: "Успешный вход",
+        description: `Добро пожаловать, ${userData.name}!`,
+      });
+
+      // Перенаправляем в зависимости от роли
+      if (userData.role === 'admin') {
+        navigate('/admin-panel');
+      } else {
+        navigate('/dashboard');
+      }
+
     } catch (error: any) {
       console.error('Login error:', error);
-      setError(error.message || 'Произошла ошибка при входе в систему');
+      
+      let errorMessage = 'Произошла ошибка при входе в систему';
+
+      if (error.name === 'AuthError') {
+        // Ошибки 401/403 - неверные учетные данные
+        errorMessage = 'Неверный email или пароль';
+      } else if (error.message) {
+        // Другие известные ошибки
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          errorMessage = 'Ошибка соединения с сервером. Проверьте интернет-подключение.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Превышено время ожидания. Попробуйте позже.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      setError(errorMessage);
+      
       toast({
         title: "Ошибка входа",
-        description: error.message || "Неверный email или пароль",
+        description: errorMessage,
         variant: "destructive",
       });
+
+      // Очищаем пароль при ошибке
+      setPassword('');
     } finally {
       setLoading(false);
     }
@@ -124,8 +223,8 @@ const Login = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
-                <AlertCircle className="w-4 h-4 text-red-600" />
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-2">
+                <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
                 <span className="text-red-700 text-sm">{error}</span>
               </div>
             )}
@@ -139,9 +238,14 @@ const Login = () => {
                   type="email"
                   placeholder="example@company.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (error) setError(''); // Очищаем ошибку при вводе
+                  }}
                   className="pl-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                  disabled={loading}
                   required
+                  autoComplete="email"
                 />
               </div>
             </div>
@@ -155,28 +259,42 @@ const Login = () => {
                   type="password"
                   placeholder="Введите пароль"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error) setError(''); // Очищаем ошибку при вводе
+                  }}
                   className="pl-10 h-12 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                  disabled={loading}
                   required
+                  autoComplete="current-password"
                 />
               </div>
             </div>
             
             <Button
               type="submit"
-              className="w-full h-12 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-              disabled={loading}
+              className="w-full h-12 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:transform-none disabled:opacity-50"
+              disabled={loading || !email.trim() || !password}
             >
               {loading ? (
                 <div className="flex items-center space-x-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Вход...</span>
+                  <span>Проверка данных...</span>
                 </div>
               ) : (
-                'Войти'
+                'Войти в систему'
               )}
             </Button>
           </form>
+
+          {/* Дополнительная информация для разработки */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+              <p className="text-xs text-gray-600 mb-2">Тестовые учетные данные:</p>
+              <p className="text-xs text-gray-500">Admin: admin@example.com</p>
+              <p className="text-xs text-gray-500">User: user@example.com</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
