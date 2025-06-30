@@ -80,10 +80,15 @@ const AdminPanel = () => {
         <div className="text-center">
           <h2 className="text-xl font-bold text-red-600 mb-2">Ошибка загрузки</h2>
           <p className="text-gray-600">Не удалось загрузить данные сотрудников</p>
+          <p className="text-sm text-gray-500 mt-2">
+            {error instanceof Error ? error.message : 'Неизвестная ошибка'}
+          </p>
         </div>
       </div>
     );
   }
+
+  console.log('Employees data in component:', employees);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
@@ -111,7 +116,7 @@ const AdminPanel = () => {
         </div>
 
         {/* Statistics Cards */}
-        {employees && (
+        {employees && employees.length > 0 && (
           <div className="grid md:grid-cols-4 gap-6 mb-8">
             <Card className="bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0 shadow-xl">
               <CardContent className="p-6">
@@ -147,7 +152,7 @@ const AdminPanel = () => {
                   <div>
                     <p className="text-gray-100 text-sm font-medium">Не в сети</p>
                     <p className="text-3xl font-bold">
-                      {employees.filter(e => e.status === 'offline').length}
+                      {employees.filter(e => e.status === 'offline' || !e.status).length}
                     </p>
                   </div>
                   <Users className="w-12 h-12 text-gray-200" />
@@ -173,11 +178,11 @@ const AdminPanel = () => {
         <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
           <CardHeader>
             <CardTitle className="text-xl font-bold text-gray-800">
-              Список сотрудников
+              Список сотрудников ({employees?.length || 0})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {employees && (
+            {employees && employees.length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -193,7 +198,9 @@ const AdminPanel = () => {
                     <TableRow key={employee.id} className="hover:bg-blue-50/50">
                       <TableCell>
                         <div>
-                          <div className="font-medium text-gray-900">{employee.name}</div>
+                          <div className="font-medium text-gray-900">
+                            {employee.name || 'Неизвестный пользователь'}
+                          </div>
                           <div className="text-sm text-gray-500">{employee.email}</div>
                         </div>
                       </TableCell>
@@ -215,12 +222,12 @@ const AdminPanel = () => {
                         <div className="flex items-center justify-end space-x-2">
                           <UserLogsDialog 
                             userId={employee.id}
-                            userName={employee.name}
+                            userName={employee.name || 'Неизвестный пользователь'}
                           />
                           <UserDialog 
                             user={{
                               id: employee.id.toString(),
-                              name: employee.name,
+                              name: employee.name || 'Неизвестный пользователь',
                               email: employee.email,
                               role: employee.role,
                               status: employee.status || 'offline',
@@ -244,7 +251,7 @@ const AdminPanel = () => {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Удалить пользователя?</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Вы действительно хотите удалить пользователя {employee.name}? 
+                                    Вы действительно хотите удалить пользователя {employee.name || employee.email}? 
                                     Это действие нельзя отменить.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
@@ -266,6 +273,13 @@ const AdminPanel = () => {
                   ))}
                 </TableBody>
               </Table>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500">Нет данных о сотрудниках</p>
+                <p className="text-sm text-gray-400 mt-2">
+                  Проверьте подключение к серверу или обратитесь к администратору
+                </p>
+              </div>
             )}
           </CardContent>
         </Card>
