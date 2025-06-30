@@ -32,7 +32,7 @@ const Login = () => {
 
   useEffect(() => {
     const checkMobile = () => {
-      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+      const userAgent = navigator.userAgent || navigator.vendor || (window as Window & { opera?: string }).opera;
       const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
       const isMobileDevice = mobileRegex.test(userAgent.toLowerCase()) || window.innerWidth <= 768;
       setIsMobile(isMobileDevice);
@@ -136,22 +136,23 @@ const Login = () => {
         navigate('/dashboard');
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
       
       let errorMessage = 'Произошла ошибка при входе в систему';
 
-      if (error.name === 'AuthError') {
+      if ((error as { name?: string }).name === 'AuthError') {
         // Ошибки 401/403 - неверные учетные данные
         errorMessage = 'Неверный email или пароль';
-      } else if (error.message) {
+      } else if ((error as Error).message) {
         // Другие известные ошибки
-        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        const message = (error as Error).message;
+        if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
           errorMessage = 'Ошибка соединения с сервером. Проверьте интернет-подключение.';
-        } else if (error.message.includes('timeout')) {
+        } else if (message.includes('timeout')) {
           errorMessage = 'Превышено время ожидания. Попробуйте позже.';
         } else {
-          errorMessage = error.message;
+          errorMessage = message;
         }
       }
 
