@@ -1,5 +1,5 @@
 // ==========================================================
-// ФИНАЛЬНАЯ ВЕРСИЯ API КЛИЕНТА С УЛУЧШЕННОЙ БЕЗОПАСНОСТЬЮ
+// ИСПРАВЛЕННЫЙ API КЛИЕНТ ДЛЯ РАБОТЫ С N8N WEBHOOKS
 // ==========================================================
 
 const API_BASE_URL = 'https://gelding-able-sailfish.ngrok-free.app/webhook';
@@ -86,13 +86,11 @@ function isValidJWT(token: string): boolean {
     const parts = token.split('.');
     if (parts.length !== 3) return false;
     
-    // Проверяем что можем декодировать payload
     const payload = JSON.parse(atob(parts[1]));
     
-    // Базовая проверка на наличие обязательных полей
     const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) return false; // Токен истек
-    if (payload.nbf && payload.nbf > now) return false; // Токен еще не активен
+    if (payload.exp && payload.exp < now) return false;
+    if (payload.nbf && payload.nbf > now) return false;
     
     return true;
   } catch {
@@ -100,14 +98,13 @@ function isValidJWT(token: string): boolean {
   }
 }
 
-// УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК ЗАПРОСОВ С УЛУЧШЕННОЙ БЕЗОПАСНОСТЬЮ
+// УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК ЗАПРОСОВ
 async function makeApiRequest<T>(url: string, options: RequestInit): Promise<T> {
   let response: Response;
   
   try {
-    // Устанавливаем timeout для запроса
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     response = await fetch(url, {
       ...options,
@@ -138,7 +135,7 @@ async function makeApiRequest<T>(url: string, options: RequestInit): Promise<T> 
         errorMessage = errorJson.message || errorJson.error || errorMessage;
       }
     } catch (e) {
-      // Игнорируем ошибку парсинга, используем стандартное сообщение
+      // Игнорируем ошибку парсинга
     }
     
     if (response.status === 401) {
@@ -156,7 +153,6 @@ async function makeApiRequest<T>(url: string, options: RequestInit): Promise<T> 
     throw new Error(errorMessage);
   }
 
-  // Если тело ответа пустое, возвращаем пустой объект
   if (!responseText.trim()) {
     return {} as T;
   }
@@ -199,11 +195,10 @@ class ApiClient {
   }
 
   private validatePassword(password: string): boolean {
-    return password && password.length >= 1; // Минимальная валидация
+    return password && password.length >= 1;
   }
   
   async register(data: RegisterRequest): Promise<RegisterResponse> {
-    // Валидация входных данных
     if (!this.validateEmail(data.email)) {
       throw new ValidationError('Некорректный email адрес');
     }
@@ -229,7 +224,6 @@ class ApiClient {
       })
     });
 
-    // Валидация ответа
     if (response.success && response.data?.token) {
       if (!this.validateToken(response.data.token)) {
         throw new Error('Сервер вернул недействительный токен');
@@ -245,7 +239,6 @@ class ApiClient {
   async login(data: LoginRequest): Promise<LoginResponse> {
     console.log('[API] Начало попытки входа...');
     
-    // Валидация входных данных
     if (!this.validateEmail(data.email)) {
       throw new ValidationError('Некорректный email адрес');
     }
@@ -272,7 +265,6 @@ class ApiClient {
 
     console.log('[API] Получен ответ от сервера:', response);
 
-    // КРИТИЧЕСКАЯ ВАЛИДАЦИЯ ОТВЕТА
     if (!response) {
       throw new Error('Сервер не вернул ответ');
     }
@@ -289,7 +281,6 @@ class ApiClient {
 
     const { user, token } = response.data;
 
-    // Валидация пользователя
     if (!user || typeof user !== 'object') {
       throw new Error('Некорректные данные пользователя');
     }
@@ -298,12 +289,10 @@ class ApiClient {
       throw new Error('Неполные данные пользователя');
     }
 
-    // Валидация токена
     if (!token || !this.validateToken(token)) {
       throw new Error('Сервер вернул недействительный токен');
     }
 
-    // Сохранение данных только после всех проверок
     console.log('[API] Сохранение данных пользователя...');
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
@@ -325,6 +314,7 @@ class ApiClient {
     });
   }
 
+  // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ ПОЛУЧЕНИЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ
   async getAllUsers(): Promise<User[]> {
     const token = this.getToken();
     if (!token || !this.validateToken(token)) {
@@ -338,23 +328,33 @@ class ApiClient {
       headers: this.getAuthHeaders(),
     });
 
+    console.log('[getAllUsers] Полученный ответ:', result);
+
     if (!result) {
       throw new Error('Сервер не вернул данные');
     }
 
-    // Проверка структуры ответа
-    if (!result.data) {
-      throw new Error('Сервер вернул некорректные данные (отсутствует поле data)');
+    // ВАЖНО: Поскольку ваш n8n workflow возвращает массив напрямую в success случае
+    // мы должны обработать разные форматы ответа
+    let users: any[];
+
+    if (result.success && Array.isArray(result.data)) {
+      // Формат { success: true, data: [...] }
+      users = result.data;
+    } else if (Array.isArray(result)) {
+      // Формат [...] (прямой массив)
+      users = result;
+    } else if (result.data && Array.isArray(result.data)) {
+      // Формат { data: [...] }
+      users = result.data;
+    } else {
+      console.error('[getAllUsers] Неожиданный формат ответа:', result);
+      throw new Error('Сервер вернул некорректные данные');
     }
 
-    if (!Array.isArray(result.data)) {
-      console.error('[getAllUsers] Ошибка: API не вернул массив пользователей. Получено:', result);
-      throw new Error('Сервер вернул некорректные данные (ожидался массив в result.data)');
-    }
+    console.log(`[getAllUsers] Получен массив из ${users.length} пользователей.`);
 
-    console.log(`[getAllUsers] Получен массив из ${result.data.length} пользователей.`);
-
-    return result.data.map((user: any) => ({
+    return users.map((user: any) => ({
       id: user.id,
       email: user.email,
       name: user.name,
@@ -364,6 +364,7 @@ class ApiClient {
     }));
   }
 
+  // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ ОБНОВЛЕНИЯ ПОЛЬЗОВАТЕЛЯ
   async updateUser(userId: number, data: { name: string; role: string }): Promise<any> {
     const token = this.getToken();
     if (!token || !this.validateToken(token)) {
@@ -378,7 +379,13 @@ class ApiClient {
       throw new ValidationError('Некорректная роль пользователя');
     }
 
-    return makeApiRequest(`${API_BASE_URL}/admin/user/${userId}`, {
+    console.log(`[updateUser] Обновление пользователя ${userId}:`, data);
+
+    // ИСПРАВЛЕННЫЙ URL: Заменяем шаблон параметра на реальный ID
+    const url = `${API_BASE_URL}/admin/user/${userId}`;
+    console.log(`[updateUser] URL запроса: ${url}`);
+
+    return makeApiRequest(url, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({
@@ -388,6 +395,7 @@ class ApiClient {
     });
   }
 
+  // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ УДАЛЕНИЯ ПОЛЬЗОВАТЕЛЯ
   async deleteUser(userId: number): Promise<any> {
     const token = this.getToken();
     if (!token || !this.validateToken(token)) {
@@ -398,19 +406,32 @@ class ApiClient {
       throw new ValidationError('Некорректный ID пользователя');
     }
 
-    return makeApiRequest(`${API_BASE_URL}/admin/user/${userId}`, {
+    console.log(`[deleteUser] Удаление пользователя ${userId}`);
+
+    // ИСПРАВЛЕННЫЙ URL: Заменяем шаблон параметра на реальный ID
+    const url = `${API_BASE_URL}/admin/delete-user/${userId}`;
+    console.log(`[deleteUser] URL запроса: ${url}`);
+
+    return makeApiRequest(url, {
       method: 'DELETE',
       headers: this.getAuthHeaders()
     });
   }
 
+  // ИСПРАВЛЕННЫЙ МЕТОД ДЛЯ ПОЛУЧЕНИЯ ЛОГОВ ПОЛЬЗОВАТЕЛЯ
   async getUserLogs(userId: number): Promise<UserLog[]> {
     const token = this.getToken();
     if (!token || !this.validateToken(token)) {
       throw new AuthError('Необходима авторизация', 401);
     }
 
-    return makeApiRequest<UserLog[]>(`${API_BASE_URL}/admin/user/${userId}/logs`, {
+    console.log(`[getUserLogs] Получение логов пользователя ${userId}`);
+
+    // ИСПРАВЛЕННЫЙ URL: Заменяем шаблон параметра на реальный ID
+    const url = `${API_BASE_URL}/admin/user/${userId}/logs`;
+    console.log(`[getUserLogs] URL запроса: ${url}`);
+
+    return makeApiRequest<UserLog[]>(url, {
       method: 'GET',
       headers: this.getAuthHeaders()
     });
@@ -461,13 +482,11 @@ class ApiClient {
     window.location.href = '/login';
   }
 
-  // Метод для проверки валидности текущего токена
   isTokenValid(): boolean {
     const token = this.getToken();
     return token ? this.validateToken(token) : false;
   }
 
-  // Метод для получения информации из токена
   getTokenPayload(): any {
     const token = this.getToken();
     if (!token || !this.validateToken(token)) return null;
