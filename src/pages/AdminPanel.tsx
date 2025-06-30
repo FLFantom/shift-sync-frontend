@@ -24,16 +24,21 @@ const AdminPanel = () => {
     refetch();
   }, [refetch]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'working':
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">На работе</Badge>;
-      case 'break':
-        return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">На перерыве</Badge>;
-      default:
-        return <Badge variant="secondary">Не в сети</Badge>;
+const getStatusBadge = (status: string) => {
+    const normalized = status.toLowerCase();
+    if (['working', 'work', 'active', 'online'].includes(normalized)) {
+      return (
+        <Badge className="bg-green-100 text-green-800 hover:bg-green-100">На работе</Badge>
+      );
     }
+    if (['break', 'on_break', 'pause'].includes(normalized)) {
+      return (
+        <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">На перерыве</Badge>
+      );
+    }
+    return <Badge variant="secondary">Не в сети</Badge>;
   };
+
 
   const getBreakDuration = (breakStartTime: string) => {
     const breakStart = new Date(breakStartTime);
