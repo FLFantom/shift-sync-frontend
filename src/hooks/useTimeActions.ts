@@ -6,7 +6,7 @@ import { toast } from '@/hooks/use-toast';
 // Обновленный интерфейс без userId (он извлекается из JWT токена)
 export interface TimeActionRequest {
   action: 'start_work' | 'start_break' | 'end_break' | 'end_work';
-  breakDuration?: number;
+  break_duration?: number;
 }
 
 export const useTimeAction = () => {
