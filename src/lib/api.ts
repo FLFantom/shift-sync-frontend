@@ -58,7 +58,7 @@ export interface UserLog {
   email: string;
 }
 
-// Custom error types (оставляем, они полезны)
+// Custom error types
 class AuthError extends Error {
   constructor(message: string, public status: number) {
     super(message);
@@ -87,6 +87,12 @@ async function makeApiRequest<T>(url: string, options: RequestInit): Promise<T> 
     throw new Error(errorMessage);
   }
 
+  // Если тело ответа пустое, возвращаем пустой объект,
+  // чтобы последующие операции не ломались
+  if (!responseText) {
+    return {} as T;
+  }
+  
   try {
     return JSON.parse(responseText) as T;
   } catch (e) {
@@ -109,10 +115,6 @@ class ApiClient {
     };
   }
   
-  // ========================================================
-  // ВСЕ МЕТОДЫ ПЕРЕПИСАНЫ ДЛЯ ПРОСТОТЫ И НАДЕЖНОСТИ
-  // ========================================================
-
   async register(data: RegisterRequest): Promise<RegisterResponse> {
     return makeApiRequest<RegisterResponse>(`${API_BASE_URL}/register-user`, {
       method: 'POST',
@@ -150,18 +152,24 @@ class ApiClient {
     });
   }
 
-  // САМЫЙ ВАЖНЫЙ МЕТОД - ТЕПЕРЬ ОН СУПЕР-ПРОСТОЙ
+  // ФИНАЛЬНАЯ, ЧИСТАЯ ВЕРСИЯ
   async getAllUsers(): Promise<User[]> {
+    console.log('[getAllUsers] Fetching users...');
     const result = await makeApiRequest<any>(`${API_BASE_URL}/admin/users`, {
       method: 'GET',
       headers: this.getAuthHeaders(),
     });
     
-    // Превращаем одиночный объект в массив, если это необходимо
-    const usersData = Array.isArray(result) ? result : [result];
+    // Ожидаем ТОЛЬКО массив. Если это не массив - это ошибка.
+    if (!Array.isArray(result)) {
+      console.error('[getAllUsers] Ошибка: API не вернул массив пользователей. Получено:', result);
+      throw new Error('Сервер вернул некорректные данные (ожидался массив).');
+    }
+    
+    console.log(`[getAllUsers] Получен массив из ${result.length} пользователей.`);
     
     // Нормализуем данные
-    return usersData.map(user => ({
+    return result.map((user: any) => ({
         id: user.id,
         email: user.email,
         name: user.name,
@@ -193,7 +201,6 @@ class ApiClient {
     });
   }
   
-  // Остальные методы без изменений
   async notifyBreakExceeded(data: { userId: number; userName: string; userEmail: string; breakDurationMinutes: number }) {
     return makeApiRequest(`${API_BASE_URL}/notify-break-exceeded`, {
         method: 'POST',
