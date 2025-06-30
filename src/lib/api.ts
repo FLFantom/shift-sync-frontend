@@ -187,7 +187,7 @@ class ApiClient {
   }
 
   // ОБНОВЛЕННАЯ ФУНКЦИЯ
-  async getAllUsers(): Promise<User[]> {
+   async getAllUsers(): Promise<User[]> {
     console.log('[getAllUsers] Fetching users...');
     const response = await fetch(`${API_BASE_URL}/admin/users`, {
       method: 'GET',
@@ -198,17 +198,22 @@ class ApiClient {
 
     let usersData: any[] = [];
 
-    // Ваш n8n возвращает чистый массив. Это основная ветка.
+    // ГЛАВНАЯ ПРОВЕРКА: ЕСЛИ ПРИШЕЛ МАССИВ
     if (Array.isArray(result)) {
-      console.log('[getAllUsers] Received a direct array of users.');
+      console.log('[getAllUsers] Получен массив пользователей.');
       usersData = result;
     } 
+    // НОВАЯ ПРОВЕРКА: ЕСЛИ ПРИШЕЛ ОДИН ОБЪЕКТ, А НЕ МАССИВ
+    else if (typeof result === 'object' && result !== null && result.id) {
+        console.log('[getAllUsers] Получен один объект пользователя, превращаем в массив.');
+        usersData = [result]; // Просто оборачиваем его в массив
+    }
     // Запасной вариант, если n8n вдруг вернет обертку { success: true, data: [...] }
     else if (result && result.success && Array.isArray(result.data)) {
-      console.log('[getAllUsers] Received a wrapped array { success, data }');
+      console.log('[getAllUsers] Получена обертка { success, data }');
       usersData = result.data;
     } else {
-      console.error('[getAllUsers] Unexpected data structure:', result);
+      console.error('[getAllUsers] Неожиданная структура данных:', result);
       throw new Error('Получена неожиданная структура данных от сервера.');
     }
     
