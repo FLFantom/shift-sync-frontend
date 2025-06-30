@@ -6,12 +6,14 @@ export const useGetAllUsers = () => {
   return useQuery({
     queryKey: ['admin', 'users'],
     queryFn: () => apiClient.getAllUsers(),
-    refetchInterval: 10000, // Автообновление каждые 10 секунд
-    refetchOnWindowFocus: true, // Обновление при фокусе на окне
-    refetchOnReconnect: true, // Обновление при восстановлении соединения
-    staleTime: 5000, // Данные считаются свежими 5 секунд
-    retry: 3, // Повторять запрос 3 раза при ошибке
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Экспоненциальная задержка
+    // УБРАНО: refetchInterval, refetchOnWindowFocus, refetchOnReconnect
+    // Только ручное обновление по кнопке или при изменениях
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false, 
+    refetchInterval: false,
+    staleTime: 60000, // Данные считаются свежими 1 минуту
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 };
 
@@ -22,12 +24,9 @@ export const useUpdateUser = () => {
     mutationFn: ({ userId, data }: { userId: number; data: { name: string; role: string } }) => 
       apiClient.updateUser(userId, data),
     onSuccess: () => {
-      // Немедленно обновляем данные пользователей
+      // Немедленно обновляем данные пользователей после изменения
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
-      toast({
-        title: "Успешно",
-        description: "Данные пользователя обновлены",
-      });
+      // Toast обрабатывается в компоненте для большего контроля
     },
     onError: (error: any) => {
       console.error('Ошибка обновления пользователя:', error);
@@ -46,17 +45,13 @@ export const useDeleteUser = () => {
   return useMutation({
     mutationFn: (userId: number) => apiClient.deleteUser(userId),
     onSuccess: () => {
-      // Немедленно обновляем данные пользователей
+      // Немедленно обновляем данные пользователей после удаления
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
-      // Toast уже обрабатывается в компоненте для большего контроля
+      // Toast обрабатывается в компоненте для большего контроля
     },
     onError: (error: any) => {
       console.error('Ошибка удаления пользователя:', error);
-      toast({
-        title: "Ошибка",
-        description: error?.message || "Не удалось удалить пользователя",
-        variant: "destructive",
-      });
+      // Не показываем toast здесь, обрабатываем в компоненте
     }
   });
 };
@@ -66,7 +61,7 @@ export const useGetUserLogs = (userId: number) => {
     queryKey: ['admin', 'user', userId, 'logs'],
     queryFn: () => apiClient.getUserLogs(userId),
     enabled: !!userId,
-    refetchOnWindowFocus: false, // Логи не нужно часто обновлять
-    staleTime: 30000, // Логи остаются свежими 30 секунд
+    refetchOnWindowFocus: false,
+    staleTime: 30000,
   });
 };
