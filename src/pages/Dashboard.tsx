@@ -220,9 +220,9 @@ const Dashboard = () => {
       
       console.log('Sending end_break action with breakDuration:', breakDurationMinutes);
       
-      await timeActionMutation.mutateAsync({ 
+      await timeActionMutation.mutateAsync({
         action: 'end_break',
-        breakDuration: breakDurationMinutes
+        break_duration: breakDurationMinutes
       });
       
       if (breakIntervalRef.current) {
