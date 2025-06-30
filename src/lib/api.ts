@@ -425,15 +425,12 @@ class ApiClient {
       throw new ValidationError('Некорректный ID пользователя');
     }
 
-    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем POST вместо DELETE для обхода CORS
-    const url = `${API_BASE_URL}/admin/delete-user/${userId}`;
+    const url = `${API_BASE_URL}/admin/user/${userId}`;
     console.log(`[deleteUser] URL: ${url}`);
-    console.log(`[deleteUser] Используем POST вместо DELETE для обхода CORS`);
 
     return makeApiRequest(url, {
-      method: 'POST', // ИЗМЕНЕНО: POST вместо DELETE
+      method: 'DELETE',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify({ userId }) // Добавляем тело запроса
     });
   }
 
