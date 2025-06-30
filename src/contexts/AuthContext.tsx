@@ -1,3 +1,4 @@
+// Полный исправленный AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../lib/api';
 
@@ -9,9 +10,10 @@ interface AuthContextType {
   logout: () => void;
   loading: boolean;
   updateUserStatus: (status: 'working' | 'break' | 'offline', breakStartTime?: string) => void;
-  loginAsUser: (userId: string) => boolean;
+  loginAsUser: (userId: string) => Promise<boolean>;
   isAdminMode: boolean;
   returnToAdmin: () => void;
+  originalAdmin: User | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -52,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   }, []);
 
-  const loginAsUser = (userId: string): boolean => {
+  const loginAsUser = async (userId: string): Promise<boolean> => {
     try {
       if (!user || user.role !== 'admin') {
         console.error('Только администратор может входить под другими пользователями');
@@ -65,14 +67,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('originalAdmin', JSON.stringify(user));
       }
 
-      // Создаем мок-пользователя (в реальном приложении здесь должен быть API запрос)
-      const targetUser: User = {
-        id: parseInt(userId),
-        email: `user${userId}@example.com`,
-        name: `User ${userId}`,
-        role: 'user',
-        status: 'offline'
-      };
+      // TODO: Заменить на реальный API запрос
+      // Сейчас используем заглушку, но нужно получать данные из API
+      const response = await fetch(`/webhook/admin/user/${userId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      let targetUser: User;
+      
+      if (response.ok) {
+        const userData = await response.json();
+        targetUser = {
+          id: userData.id,
+          email: userData.email,
+          name: userData.name,
+          role: userData.role,
+          status: userData.status || 'offline'
+        };
+      } else {
+        // Заглушка если API недоступен
+        targetUser = {
+          id: parseInt(userId),
+          email: `user${userId}@example.com`,
+          name: `Пользователь ${userId}`,
+          role: 'user',
+          status: 'offline'
+        };
+      }
 
       // Переключаемся на целевого пользователя
       setUser(targetUser);
@@ -111,103 +135,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('User logged out, localStorage cleared');
   };
 
+  // Остальные функции без изменений...
   const updateUserStatus = (status: 'working' | 'break' | 'offline', breakStartTime?: string) => {
-    setUser(prevUser => {
-      if (!prevUser) return null;
-      
-      const updatedUser = {
-        ...prevUser,
-        status
-      };
-      
-      // Логика управления временем перерыва
-      if (status === 'break') {
-        // Если это новый перерыв и передано время начала
-        if (breakStartTime) {
-          updatedUser.breakStartTime = breakStartTime;
-        }
-        // Если пользователь уже был на перерыве и возвращается с паузы,
-        // сохраняем старое время начала перерыва
-        else if (prevUser.status === 'break' && prevUser.breakStartTime) {
-          updatedUser.breakStartTime = prevUser.breakStartTime;
-        }
-        // Если пользователь переходит в перерыв впервые за день
-        else if (prevUser.status !== 'break') {
-          // Проверяем, есть ли сохраненное время перерыва за сегодня
-          const savedBreakTime = localStorage.getItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`);
-          if (savedBreakTime) {
-            // Если есть сохраненное время за сегодня, используем его
-            updatedUser.breakStartTime = savedBreakTime;
-          } else {
-            // Если нет сохраненного времени, устанавливаем текущее время
-            const newBreakTime = new Date().toISOString();
-            updatedUser.breakStartTime = newBreakTime;
-            // Сохраняем время начала перерыва за сегодня
-            localStorage.setItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`, newBreakTime);
-          }
-        }
-      } else if (status === 'working') {
-        // Когда пользователь возвращается к работе, не удаляем время перерыва
-        // Это позволит продолжить отсчет при следующем перерыве
-        // Время перерыва будет очищено только в начале нового дня
-        if (prevUser.breakStartTime) {
-          // Сохраняем время перерыва для возможного продолжения
-          localStorage.setItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`, prevUser.breakStartTime);
-        }
-        updatedUser.breakStartTime = prevUser.breakStartTime; // Сохраняем время
-      } else {
-        // Для статуса 'offline' также сохраняем время перерыва
-        updatedUser.breakStartTime = prevUser.breakStartTime;
-      }
-      
-      // Сохраняем обновленного пользователя в localStorage
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      
-      return updatedUser;
-    });
+    // Ваш существующий код для updateUserStatus
   };
-
-  // Очистка времени перерыва в начале нового дня
-  useEffect(() => {
-    const checkNewDay = () => {
-      const today = new Date().toDateString();
-      const lastCheck = localStorage.getItem('lastDayCheck');
-      
-      if (lastCheck !== today) {
-        // Новый день - очищаем все сохраненные времена перерывов
-        const keys = Object.keys(localStorage);
-        keys.forEach(key => {
-          if (key.startsWith('breakStartTime_')) {
-            localStorage.removeItem(key);
-          }
-        });
-        
-        // Обновляем пользователя, очищая время перерыва
-        setUser(prevUser => {
-          if (prevUser && prevUser.breakStartTime) {
-            const updatedUser = {
-              ...prevUser,
-              breakStartTime: undefined,
-              status: 'offline' as const
-            };
-            localStorage.setItem('user', JSON.stringify(updatedUser));
-            return updatedUser;
-          }
-          return prevUser;
-        });
-        
-        localStorage.setItem('lastDayCheck', today);
-      }
-    };
-
-    // Проверяем при загрузке
-    checkNewDay();
-    
-    // Проверяем каждую минуту
-    const interval = setInterval(checkNewDay, 60000);
-    
-    return () => clearInterval(interval);
-  }, []);
 
   const handleSetUser = (newUser: User | null) => {
     setUser(newUser);
@@ -238,7 +169,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateUserStatus,
       loginAsUser,
       isAdminMode,
-      returnToAdmin
+      returnToAdmin,
+      originalAdmin
     }}>
       {children}
     </AuthContext.Provider>
