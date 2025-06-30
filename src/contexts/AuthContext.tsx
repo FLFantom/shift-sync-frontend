@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../lib/api';
 
@@ -14,7 +13,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,16 +45,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const updateUserStatus = (status: 'working' | 'break' | 'offline', breakStartTime?: string) => {
-    if (user) {
-      const updatedUser = { 
-        ...user, 
-        status,
-        breakStartTime: status === 'break' ? (breakStartTime || new Date().toISOString()) : undefined
+    setUser(prevUser => {
+      if (!prevUser) return null;
+      
+      const updatedUser = {
+        ...prevUser,
+        status
       };
-      setUser(updatedUser);
+      
+      // Правильно обрабатываем время начала перерыва
+      if (status === 'break') {
+        // Если передано время начала перерыва, используем его
+        if (breakStartTime) {
+          updatedUser.breakStartTime = breakStartTime;
+        }
+        // Если время не передано, но пользователь уже был на перерыве, сохраняем старое время
+        else if (prevUser.status === 'break' && prevUser.breakStartTime) {
+          updatedUser.breakStartTime = prevUser.breakStartTime;
+        }
+        // Если это новый перерыв, устанавливаем текущее время
+        else {
+          updatedUser.breakStartTime = new Date().toISOString();
+        }
+      } else {
+        // Если статус не "break", очищаем время начала перерыва
+        updatedUser.breakStartTime = undefined;
+      }
+      
+      // Сохраняем обновленного пользователя в localStorage
       localStorage.setItem('user', JSON.stringify(updatedUser));
-      console.log('User status updated:', updatedUser);
-    }
+      
+      return updatedUser;
+    });
   };
 
   const handleSetUser = (newUser: User | null) => {

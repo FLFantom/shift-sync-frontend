@@ -1,4 +1,3 @@
-
 const API_BASE_URL = 'https://gelding-able-sailfish.ngrok-free.app/webhook';
 
 export interface LoginRequest {
@@ -237,13 +236,39 @@ class ApiClient {
 
     const result = await this.handleResponse(response);
     
-    // Handle both wrapped and direct formats
-    if (result.success && result.data) {
-      return Array.isArray(result.data) ? result.data : [];
-    } else if (Array.isArray(result)) {
+    // Из логов видно, что API возвращает только данные админа
+    // Если это массив пользователей, возвращаем его
+    if (Array.isArray(result)) {
       return result;
     }
     
+    // Если обернуто в data и это массив
+    if (result.success && Array.isArray(result.data)) {
+      return result.data;
+    }
+    
+    // Если API возвращает только данные одного пользователя (как в логах)
+    // Возвращаем его как массив
+    if (result.userId || result.id) {
+      return [{
+        id: result.userId || result.id,
+        email: result.email,
+        name: result.name || 'Unknown',
+        role: result.role || 'user'
+      }];
+    }
+    
+    // Если в data есть пользователь
+    if (result.success && result.data && (result.data.userId || result.data.id)) {
+      return [{
+        id: result.data.userId || result.data.id,
+        email: result.data.email,
+        name: result.data.name || 'Unknown',
+        role: result.data.role || 'user'
+      }];
+    }
+    
+    console.log('Unexpected admin users response:', result);
     return [];
   }
 
