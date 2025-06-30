@@ -137,8 +137,9 @@ const Dashboard = () => {
       
       console.log('Sending start_work action');
       
-      await timeActionMutation.mutateAsync({ 
-        action: 'start_work'
+      await timeActionMutation.mutateAsync({
+        action: 'end_break',
+        break_duration: breakDurationMinutes
       });
       
       updateUserStatus('working');
