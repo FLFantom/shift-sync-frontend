@@ -5,20 +5,51 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Users, Settings, ArrowLeft, Trash2, Loader2, LogIn } from 'lucide-react';
+import { Users, Settings, ArrowLeft, Trash2, Loader2, LogIn, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import UserDialog from '../components/UserDialog';
-import React from 'react';
+import React, { useCallback } from 'react';
 import { toast } from '@/hooks/use-toast';
 
 const AdminPanel = () => {
   const { user, loginAsUser, isAdminMode, returnToAdmin } = useAuth();
   const navigate = useNavigate();
 
-  const { data: employees, isLoading, error, refetch } = useGetAllUsers();
+  const { data: employees, isLoading, error, refetch, isFetching } = useGetAllUsers();
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
 
+  // Автообновление каждые 10 секунд
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      refetch();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [refetch]);
+
+  // Обновление при фокусе на окне
+  React.useEffect(() => {
+    const handleFocus = () => {
+      refetch();
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refetch();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refetch]);
+
+  // Первоначальная загрузка
   React.useEffect(() => {
     refetch();
   }, [refetch]);
@@ -26,7 +57,7 @@ const AdminPanel = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'working':
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">На месте</Badge>;
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">На работе</Badge>;
       case 'break':
         return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">На перерыве</Badge>;
       default:
@@ -49,34 +80,51 @@ const AdminPanel = () => {
     );
   };
 
-  const handleUpdateUser = (userData: { name: string; email: string; role: 'user' | 'admin' }, userId: number) => {
-    updateUserMutation.mutate({ userId, data: { name: userData.name, role: userData.role } });
-  };
+  const handleUpdateUser = useCallback((userData: { name: string; email: string; role: 'user' | 'admin' }, userId: number) => {
+    updateUserMutation.mutate({ userId, data: { name: userData.name, role: userData.role } }, {
+      onSuccess: () => {
+        // Обновляем данные после успешного изменения
+        refetch();
+      }
+    });
+  }, [updateUserMutation, refetch]);
 
-  const handleDeleteUser = (employeeId: number, employeeName: string) => {
+  const handleDeleteUser = useCallback((employeeId: number, employeeName: string) => {
     deleteUserMutation.mutate(employeeId, {
       onSuccess: () => {
         toast({ title: "Удаление", description: `Пользователь ${employeeName} удален`, variant: "destructive" });
+        // Обновляем данные после удаления
+        refetch();
       },
       onError: () => {
         toast({ title: "Ошибка", description: "Не удалось удалить пользователя", variant: "destructive" });
       }
     });
-  };
+  }, [deleteUserMutation, refetch]);
 
-  const handleLoginAsUser = (employeeId: string, employeeName: string) => {
-    const success = loginAsUser(employeeId);
-    if (success) {
-      toast({ title: "Вход выполнен", description: `Вы вошли как ${employeeName}` });
-      navigate('/dashboard');
-    } else {
+  const handleLoginAsUser = useCallback(async (employeeId: string, employeeName: string) => {
+    try {
+      const success = await loginAsUser(employeeId);
+      if (success) {
+        toast({ title: "Вход выполнен", description: `Вы вошли как ${employeeName}` });
+        navigate('/dashboard');
+      } else {
+        toast({ title: "Ошибка", description: "Не удалось войти как пользователь", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Ошибка входа под пользователем:', error);
       toast({ title: "Ошибка", description: "Не удалось войти как пользователь", variant: "destructive" });
     }
-  };
+  }, [loginAsUser, navigate]);
+
+  const handleManualRefresh = useCallback(() => {
+    refetch();
+    toast({ title: "Обновление", description: "Данные обновлены" });
+  }, [refetch]);
 
   if (!user || user.role !== 'admin') return null;
 
-  if (isLoading) {
+  if (isLoading && !employees) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
         <div className="flex items-center space-x-2">
@@ -87,7 +135,7 @@ const AdminPanel = () => {
     );
   }
 
-  if (error) {
+  if (error && !employees) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
         <div className="text-center">
@@ -109,6 +157,12 @@ const AdminPanel = () => {
               <Settings className="w-8 h-8 mr-3 text-blue-600" />Админ-панель
             </h1>
             <p className="text-gray-600 mt-1">Управление сотрудниками и учет рабочего времени</p>
+            {isFetching && (
+              <p className="text-blue-600 text-sm mt-1 flex items-center">
+                <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                Обновление данных...
+              </p>
+            )}
           </div>
           <div className="flex items-center space-x-2">
             {isAdminMode && (
@@ -116,7 +170,16 @@ const AdminPanel = () => {
                 <ArrowLeft className="w-4 h-4 mr-2" />Вернуться к администратору
               </Button>
             )}
-            <Button onClick={() => refetch()} variant="outline" size="sm" className="border-blue-200 text-blue-600 hover:bg-blue-50">Обновить</Button>
+            <Button 
+              onClick={handleManualRefresh} 
+              variant="outline" 
+              size="sm" 
+              className="border-blue-200 text-blue-600 hover:bg-blue-50"
+              disabled={isFetching}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
+              Обновить
+            </Button>
             <Button onClick={() => navigate('/dashboard')} variant="outline" className="border-blue-200 text-blue-600 hover:bg-blue-50">
               <ArrowLeft className="w-4 h-4 mr-2" />Назад к панели
             </Button>
@@ -176,7 +239,14 @@ const AdminPanel = () => {
         {/* Таблица сотрудников */}
         <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
           <CardHeader>
-            <CardTitle className="text-xl font-bold text-gray-800">Список сотрудников ({employees?.length || 0})</CardTitle>
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-xl font-bold text-gray-800">
+                Список сотрудников ({employees?.length || 0})
+              </CardTitle>
+              <div className="text-sm text-gray-500">
+                Автообновление каждые 10 секунд
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {employees && employees.length > 0 ? (
@@ -212,14 +282,35 @@ const AdminPanel = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end space-x-2">
-                          <UserDialog user={{ id: employee.id.toString(), name: employee.name, email: employee.email, role: employee.role, status: employee.status || 'offline', breakStartTime: employee.breakStartTime }} onSave={(userData) => handleUpdateUser(userData, employee.id)} />
-                          <Button size="sm" variant="outline" onClick={() => handleLoginAsUser(employee.id.toString(), employee.name)} className="border-green-200 text-green-600 hover:bg-green-50">
+                          <UserDialog 
+                            user={{ 
+                              id: employee.id.toString(), 
+                              name: employee.name, 
+                              email: employee.email, 
+                              role: employee.role, 
+                              status: employee.status || 'offline', 
+                              breakStartTime: employee.breakStartTime 
+                            }} 
+                            onSave={(userData) => handleUpdateUser(userData, employee.id)} 
+                          />
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => handleLoginAsUser(employee.id.toString(), employee.name)} 
+                            className="border-green-200 text-green-600 hover:bg-green-50"
+                            disabled={isFetching}
+                          >
                             <LogIn className="w-4 h-4" />
                           </Button>
                           {employee.id !== user.id && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button size="sm" variant="outline" className="border-red-200 text-red-600 hover:bg-red-50" disabled={deleteUserMutation.isPending}>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="border-red-200 text-red-600 hover:bg-red-50" 
+                                  disabled={deleteUserMutation.isPending || isFetching}
+                                >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
                               </AlertDialogTrigger>
@@ -232,8 +323,12 @@ const AdminPanel = () => {
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Отмена</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteUser(employee.id, employee.name)} className="bg-red-600 hover:bg-red-700">
-                                    Удалить
+                                  <AlertDialogAction 
+                                    onClick={() => handleDeleteUser(employee.id, employee.name)} 
+                                    className="bg-red-600 hover:bg-red-700"
+                                    disabled={deleteUserMutation.isPending}
+                                  >
+                                    {deleteUserMutation.isPending ? 'Удаление...' : 'Удалить'}
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
@@ -248,8 +343,20 @@ const AdminPanel = () => {
             ) : (
               <div className="text-center py-8">
                 <p className="text-gray-500">Нет данных о сотрудниках</p>
-                <p className="text-sm text-gray-400 mt-2">API возвращает только данные текущего пользователя</p>
-                <Button onClick={() => refetch()} className="mt-4">Обновить данные</Button>
+                <p className="text-sm text-gray-400 mt-2">
+                  {isFetching ? 'Загрузка данных...' : 'Попробуйте обновить данные'}
+                </p>
+                <Button 
+                  onClick={handleManualRefresh} 
+                  className="mt-4"
+                  disabled={isFetching}
+                >
+                  {isFetching ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Загрузка...</>
+                  ) : (
+                    'Обновить данные'
+                  )}
+                </Button>
               </div>
             )}
           </CardContent>
