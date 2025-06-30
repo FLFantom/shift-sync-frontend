@@ -1,260 +1,175 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { toast } from '@/hooks/use-toast';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'user' | 'admin';
-  status: 'working' | 'break' | 'offline';
-  breakStartTime?: string;
-}
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { User } from '../lib/api';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  token: string | null;
+  setUser: (user: User | null) => void;
+  setToken: (token: string | null) => void;
   logout: () => void;
   loading: boolean;
   updateUserStatus: (status: 'working' | 'break' | 'offline', breakStartTime?: string) => void;
-  loginAsUser: (userId: string) => boolean;
-  getAllUsers: () => User[];
-  updateUser: (userId: string, userData: Partial<User>) => boolean;
-  deleteUser: (userId: string) => boolean;
-  addUser: (userData: Omit<User, 'id' | 'status'>) => boolean;
-  isAdminMode: boolean;
-  returnToAdmin: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock data for demo purposes
-let mockUsers: User[] = [
-  {
-    id: '1',
-    name: 'Иван Петров',
-    email: 'ivan@company.com',
-    role: 'user',
-    status: 'offline'
-  },
-  {
-    id: '2', 
-    name: 'Мария Сидорова',
-    email: 'maria@company.com',
-    role: 'user',
-    status: 'working'
-  },
-  {
-    id: '3',
-    name: 'Админ',
-    email: 'admin@company.com',
-    role: 'admin',
-    status: 'offline'
-  },
-  {
-    id: '4',
-    name: 'Александр Иванов',
-    email: 'alex@company.com', 
-    role: 'user',
-    status: 'break',
-    breakStartTime: new Date(Date.now() - 2700000).toISOString()
-  },
-  {
-    id: '5',
-    name: 'Елена Смирнова',
-    email: 'elena@company.com',
-    role: 'user',
-    status: 'break',
-    breakStartTime: new Date(Date.now() - 4500000).toISOString()
-  }
-];
-
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isAdminMode, setIsAdminMode] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const storedToken = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    const originalAdmin = localStorage.getItem('originalAdmin');
     
-    if (token && userData) {
+    if (storedToken && userData) {
       try {
-        setUser(JSON.parse(userData));
-        setIsAdminMode(!!originalAdmin);
+        const parsedUser = JSON.parse(userData);
+        setToken(storedToken);
+        setUser(parsedUser);
       } catch (error) {
+        console.error('Error parsing stored user data:', error);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        localStorage.removeItem('originalAdmin');
       }
     }
     setLoading(false);
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    try {
-      const foundUser = mockUsers.find(u => u.email === email);
-      
-      if (foundUser && password === '123456') {
-        const token = 'mock-jwt-token';
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(foundUser));
-        setUser(foundUser);
-        
-        toast({
-          title: "Добро пожаловать!",
-          description: `Вы вошли как ${foundUser.name}`,
-        });
-        
-        return true;
-      } else {
-        toast({
-          title: "Ошибка входа",
-          description: "Неверный email или пароль",
-          variant: "destructive",
-        });
-        return false;
-      }
-    } catch (error) {
-      toast({
-        title: "Ошибка",
-        description: "Произошла ошибка при входе",
-        variant: "destructive",
-      });
-      return false;
-    }
-  };
-
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    localStorage.removeItem('originalAdmin');
     setUser(null);
-    setIsAdminMode(false);
+    setToken(null);
+    console.log('User logged out, localStorage cleared');
   };
 
   const updateUserStatus = (status: 'working' | 'break' | 'offline', breakStartTime?: string) => {
-    if (user) {
-      let newBreakStartTime;
+    setUser(prevUser => {
+      if (!prevUser) return null;
       
+      const updatedUser = {
+        ...prevUser,
+        status
+      };
+      
+      // Логика управления временем перерыва
       if (status === 'break') {
-        // Проверяем, был ли уже перерыв сегодня (независимо от текущего статуса)
-        if (user.breakStartTime) {
-          const existingBreakDate = new Date(user.breakStartTime);
-          const currentDate = new Date();
-          
-          // Проверяем, тот ли это день (год, месяц, день)
-          const isSameDay = existingBreakDate.getFullYear() === currentDate.getFullYear() &&
-                           existingBreakDate.getMonth() === currentDate.getMonth() &&
-                           existingBreakDate.getDate() === currentDate.getDate();
-          
-          if (isSameDay) {
-            newBreakStartTime = user.breakStartTime; // Сохраняем существующее время
-          } else {
-            newBreakStartTime = breakStartTime || new Date().toISOString(); // Новый день, новое время
-          }
-        } else {
-          newBreakStartTime = breakStartTime || new Date().toISOString(); // Первый перерыв
+        // Если это новый перерыв и передано время начала
+        if (breakStartTime) {
+          updatedUser.breakStartTime = breakStartTime;
         }
+        // Если пользователь уже был на перерыве и возвращается с паузы,
+        // сохраняем старое время начала перерыва
+        else if (prevUser.status === 'break' && prevUser.breakStartTime) {
+          updatedUser.breakStartTime = prevUser.breakStartTime;
+        }
+        // Если пользователь переходит в перерыв впервые за день
+        else if (prevUser.status !== 'break') {
+          // Проверяем, есть ли сохраненное время перерыва за сегодня
+          const savedBreakTime = localStorage.getItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`);
+          if (savedBreakTime) {
+            // Если есть сохраненное время за сегодня, используем его
+            updatedUser.breakStartTime = savedBreakTime;
+          } else {
+            // Если нет сохраненного времени, устанавливаем текущее время
+            const newBreakTime = new Date().toISOString();
+            updatedUser.breakStartTime = newBreakTime;
+            // Сохраняем время начала перерыва за сегодня
+            localStorage.setItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`, newBreakTime);
+          }
+        }
+      } else if (status === 'working') {
+        // Когда пользователь возвращается к работе, не удаляем время перерыва
+        // Это позволит продолжить отсчет при следующем перерыве
+        // Время перерыва будет очищено только в начале нового дня
+        if (prevUser.breakStartTime) {
+          // Сохраняем время перерыва для возможного продолжения
+          localStorage.setItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`, prevUser.breakStartTime);
+        }
+        updatedUser.breakStartTime = prevUser.breakStartTime; // Сохраняем время
+      } else {
+        // Для статуса 'offline' также сохраняем время перерыва
+        updatedUser.breakStartTime = prevUser.breakStartTime;
       }
       
-      const updatedUser = { 
-        ...user, 
-        status, 
-        breakStartTime: status === 'break' ? newBreakStartTime : user.breakStartTime // Сохраняем время перерыва даже при смене статуса
-      };
-      setUser(updatedUser);
+      // Сохраняем обновленного пользователя в localStorage
       localStorage.setItem('user', JSON.stringify(updatedUser));
       
-      // Update in mockUsers array
-      const userIndex = mockUsers.findIndex(u => u.id === user.id);
-      if (userIndex !== -1) {
-        mockUsers[userIndex] = updatedUser;
-      }
-    }
+      return updatedUser;
+    });
   };
 
-  const loginAsUser = (userId: string): boolean => {
-    if (user?.role !== 'admin') return false;
-    
-    const targetUser = mockUsers.find(u => u.id === userId);
-    if (targetUser) {
-      const token = 'mock-jwt-token';
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(targetUser));
-      localStorage.setItem('originalAdmin', JSON.stringify(user));
-      setUser(targetUser);
-      setIsAdminMode(true);
-      return true;
-    }
-    return false;
-  };
-
-  const returnToAdmin = () => {
-    const originalAdmin = localStorage.getItem('originalAdmin');
-    if (originalAdmin) {
-      try {
-        const adminUser = JSON.parse(originalAdmin);
-        localStorage.setItem('user', JSON.stringify(adminUser));
-        localStorage.removeItem('originalAdmin');
-        setUser(adminUser);
-        setIsAdminMode(false);
-        toast({
-          title: "Возврат в админ-панель",
-          description: "Вы вернулись в режим администратора",
+  // Очистка времени перерыва в начале нового дня
+  useEffect(() => {
+    const checkNewDay = () => {
+      const today = new Date().toDateString();
+      const lastCheck = localStorage.getItem('lastDayCheck');
+      
+      if (lastCheck !== today) {
+        // Новый день - очищаем все сохраненные времена перерывов
+        const keys = Object.keys(localStorage);
+        keys.forEach(key => {
+          if (key.startsWith('breakStartTime_')) {
+            localStorage.removeItem(key);
+          }
         });
-      } catch (error) {
-        console.error('Error returning to admin:', error);
+        
+        // Обновляем пользователя, очищая время перерыва
+        setUser(prevUser => {
+          if (prevUser && prevUser.breakStartTime) {
+            const updatedUser = {
+              ...prevUser,
+              breakStartTime: undefined,
+              status: 'offline' as const
+            };
+            localStorage.setItem('user', JSON.stringify(updatedUser));
+            return updatedUser;
+          }
+          return prevUser;
+        });
+        
+        localStorage.setItem('lastDayCheck', today);
       }
-    }
-  };
-
-  const getAllUsers = (): User[] => {
-    return mockUsers;
-  };
-
-  const updateUser = (userId: string, userData: Partial<User>): boolean => {
-    const userIndex = mockUsers.findIndex(u => u.id === userId);
-    if (userIndex !== -1) {
-      mockUsers[userIndex] = { ...mockUsers[userIndex], ...userData };
-      return true;
-    }
-    return false;
-  };
-
-  const deleteUser = (userId: string): boolean => {
-    const userIndex = mockUsers.findIndex(u => u.id === userId);
-    if (userIndex !== -1) {
-      mockUsers.splice(userIndex, 1);
-      return true;
-    }
-    return false;
-  };
-
-  const addUser = (userData: Omit<User, 'id' | 'status'>): boolean => {
-    const newUser: User = {
-      ...userData,
-      id: Date.now().toString(),
-      status: 'offline'
     };
-    mockUsers.push(newUser);
-    return true;
+
+    // Проверяем при загрузке
+    checkNewDay();
+    
+    // Проверяем каждую минуту
+    const interval = setInterval(checkNewDay, 60000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSetUser = (newUser: User | null) => {
+    setUser(newUser);
+    if (newUser) {
+      localStorage.setItem('user', JSON.stringify(newUser));
+    } else {
+      localStorage.removeItem('user');
+    }
+  };
+
+  const handleSetToken = (newToken: string | null) => {
+    setToken(newToken);
+    if (newToken) {
+      localStorage.setItem('token', newToken);
+    } else {
+      localStorage.removeItem('token');
+    }
   };
 
   return (
     <AuthContext.Provider value={{ 
       user, 
-      login, 
+      token,
+      setUser: handleSetUser,
+      setToken: handleSetToken,
       logout, 
       loading, 
-      updateUserStatus,
-      loginAsUser,
-      getAllUsers,
-      updateUser,
-      deleteUser,
-      addUser,
-      isAdminMode,
-      returnToAdmin
+      updateUserStatus
     }}>
       {children}
     </AuthContext.Provider>

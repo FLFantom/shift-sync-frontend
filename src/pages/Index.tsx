@@ -43,7 +43,7 @@ const Index = () => {
             } 
           />
           <Route 
-            path="/admin" 
+            path="/admin-panel" 
             element={
               <ProtectedRoute adminOnly>
                 <AdminPanel />

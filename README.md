@@ -1,73 +1,175 @@
-# Welcome to your Lovable project
 
-## Project info
+# Система учета рабочего времени
 
-**URL**: https://lovable.dev/projects/309bb27e-cbd1-41f1-9a48-1ac9b89cfc4c
+## Описание проекта
 
-## How can I edit this code?
+Это веб-приложение для учета рабочего времени сотрудников, разработанное на современном стеке технологий. Система позволяет отслеживать рабочие часы, перерывы и статусы сотрудников в режиме реального времени.
 
-There are several ways of editing your application.
+## Основные функции
 
-**Use Lovable**
+### Для сотрудников:
+- **Авторизация** - вход в систему с использованием email и пароля
+- **Учет рабочего времени** - фиксация начала и окончания рабочего дня
+- **Управление перерывами** - начало и окончание перерывов с отслеживанием времени
+- **Контроль времени перерыва** - уведомления при превышении лимита (1 час)
+- **Отображение текущего статуса** - визуальные индикаторы состояния (работа/перерыв/не в сети)
+- **Реальное время** - отображение текущего времени и даты
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/309bb27e-cbd1-41f1-9a48-1ac9b89cfc4c) and start prompting.
+### Для администраторов:
+- **Панель управления** - полный доступ к управлению сотрудниками
+- **Просмотр всех сотрудников** - список с текущими статусами и временем перерывов
+- **Управление пользователями** - добавление, редактирование и удаление сотрудников
+- **Временный вход** - возможность войти от имени любого сотрудника для проверки
+- **Мониторинг в реальном времени** - отслеживание активности всех сотрудников
 
-Changes made via Lovable will be committed automatically to this repo.
+## Особенности системы
 
-**Use your preferred IDE**
+### Интеллектуальный учет перерывов
+- Время перерыва не сбрасывается при повторном нажатии кнопки "Начать перерыв" в течение дня
+- Автоматический сброс счетчика перерыва в новый день
+- Предупреждения при превышении рекомендованного времени перерыва (1 час)
+- Визуальное выделение превышения времени красным цветом
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Система ролей
+- **Обычные пользователи** - могут управлять только своим рабочим временем
+- **Администраторы** - полный доступ к системе управления
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Безопасность
+- Защищенные маршруты с проверкой авторизации
+- Локальное сохранение сессий
+- Разделение прав доступа по ролям
 
-Follow these steps:
+## Технический стек
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Frontend
+- **React 18.3.1** - основная библиотека для создания пользовательского интерфейса
+- **TypeScript** - типизированный JavaScript для повышения надежности кода
+- **Vite** - современный инструмент сборки для быстрой разработки
+- **React Router DOM 6.26.2** - маршрутизация в приложении
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### UI и стилизация
+- **Tailwind CSS** - утилитарный CSS-фреймворк для быстрой стилизации
+- **shadcn/ui** - высококачественные компоненты пользовательского интерфейса
+- **Radix UI** - примитивы для создания доступных компонентов
+- **Lucide React** - иконки для интерфейса
 
-# Step 3: Install the necessary dependencies.
-npm i
+### Дополнительные библиотеки
+- **TanStack React Query 5.56.2** - управление состоянием сервера и кэширование
+- **React Hook Form 7.53.0** - эффективная работа с формами
+- **Date-fns 3.6.0** - утилиты для работы с датами
+- **Sonner** - уведомления и тосты
+- **Zod 3.23.8** - валидация схем данных
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+## Структура проекта
+
+```
+src/
+├── components/          # Переиспользуемые компоненты
+│   └── ui/             # UI компоненты из shadcn/ui
+├── contexts/           # React контексты
+│   └── AuthContext.tsx # Контекст аутентификации
+├── pages/              # Страницы приложения
+│   ├── Index.tsx       # Главная страница с роутингом
+│   ├── Login.tsx       # Страница авторизации
+│   ├── Dashboard.tsx   # Панель сотрудника
+│   └── AdminPanel.tsx  # Панель администратора
+├── hooks/              # Пользовательские хуки
+└── lib/                # Утилиты и конфигурация
+```
+
+## Установка и запуск
+
+### Предварительные требования
+- Node.js (версия 18 или выше)
+- npm или yarn
+
+### Установка зависимостей
+```bash
+npm install
+```
+
+### Запуск в режиме разработки
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Сборка для продакшена
+```bash
+npm run build
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Предварительный просмотр сборки
+```bash
+npm run preview
+```
 
-**Use GitHub Codespaces**
+## Тестовые аккаунты
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Для демонстрации функционала в системе предустановлены следующие аккаунты:
 
-## What technologies are used for this project?
+### Администратор
+- **Email:** admin@company.com
+- **Пароль:** 123456
+- **Права:** Полный доступ к системе управления
 
-This project is built with:
+### Сотрудники
+- **Email:** ivan@company.com / **Пароль:** 123456
+- **Email:** maria@company.com / **Пароль:** 123456
+- **Email:** alex@company.com / **Пароль:** 123456
+- **Email:** elena@company.com / **Пароль:** 123456
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Возможности развития
 
-## How can I deploy this project?
+### Планируемые функции
+- [ ] Интеграция с базой данных (Supabase)
+- [ ] Отчеты по рабочему времени
+- [ ] Экспорт данных в Excel/PDF
+- [ ] Push-уведомления
+- [ ] Мобильное приложение
+- [ ] Интеграция с календарем
+- [ ] Геолокация для проверки местоположения
+- [ ] Система задач и проектов
 
-Simply open [Lovable](https://lovable.dev/projects/309bb27e-cbd1-41f1-9a48-1ac9b89cfc4c) and click on Share -> Publish.
+### Технические улучшения
+- [ ] Автоматические тесты (Jest, React Testing Library)
+- [ ] CI/CD пайплайн
+- [ ] Docker контейнеризация
+- [ ] Многоязычность (i18n)
+- [ ] Темная тема
+- [ ] PWA поддержка
 
-## Can I connect a custom domain to my Lovable project?
+## Развертывание
 
-Yes, you can!
+### Lovable Platform (рекомендуется)
+Приложение может быть развернуто одним кликом на платформе Lovable:
+1. Нажмите кнопку "Publish" в редакторе Lovable
+2. Ваше приложение будет доступно по адресу `yourapp.lovable.app`
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### Другие платформы
+- **Vercel** - идеально подходит для React приложений
+- **Netlify** - простое развертывание статических сайтов
+- **GitHub Pages** - бесплатный хостинг для публичных репозиториев
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## Поддержка и документация
+
+### Официальная документация Lovable
+- [Быстрый старт](https://docs.lovable.dev/user-guides/quickstart)
+- [Discord сообщество](https://discord.com/channels/1119885301872070706/1280461670979993613)
+- [YouTube плейлист](https://www.youtube.com/watch?v=9KHLTZaJcR8&list=PLbVHz4urQBZkJiAWdG8HWoJTdgEysigIO)
+
+### Техническая поддержка
+Для вопросов по разработке и использованию системы обращайтесь к документации используемых технологий или создавайте issues в репозитории проекта.
+
+## Лицензия
+
+Этот проект создан для демонстрационных целей. При использовании в коммерческих целях убедитесь в соблюдении лицензий всех используемых библиотек.
+
+## Авторы
+
+Проект разработан с использованием платформы Lovable - AI-редактора для создания веб-приложений.
+
+---
+
+**Дата создания:** 2025
+**Последнее обновление:** 27 июня 2025
+**Версия:** 1.0.0
