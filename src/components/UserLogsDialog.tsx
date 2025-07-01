@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Loader2 } from 'lucide-react';
-import { useGetUserLogs } from '../hooks/useAdminApi';
+import { useGetUserLogs } from '../hooks/useSupabaseAdmin';
 
 interface UserLogsDialogProps {
   userId: number;

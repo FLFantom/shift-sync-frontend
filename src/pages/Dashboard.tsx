@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Clock, Coffee, LogOut, User, Play, Pause, Square, Settings, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
+import { supabaseApiClient } from '@/lib/supabaseApi';
+import ChangePasswordDialog from '@/components/ChangePasswordDialog';
 
 const Dashboard = () => {
   const { user, logout, updateUserStatus, isAdminMode, returnToAdmin } = useAuth();
@@ -59,38 +61,82 @@ const Dashboard = () => {
     }
   };
 
-  const handleStartWork = () => {
-    updateUserStatus('working');
-    toast({
-      title: "Работа начата",
-      description: "Удачного рабочего дня!",
-    });
+  const handleStartWork = async () => {
+    if (!user) return;
+    
+    try {
+      await supabaseApiClient.timeAction(user.id, 'start_work');
+      updateUserStatus('working');
+      toast({
+        title: "Работа начата",
+        description: "Удачного рабочего дня!",
+      });
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось начать работу",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleStartBreak = () => {
-    const breakStartTime = new Date().toISOString();
-    updateUserStatus('break', breakStartTime);
-    toast({
-      title: "Перерыв начат",
-      description: "Хорошего отдыха!",
-    });
+  const handleStartBreak = async () => {
+    if (!user) return;
+    
+    try {
+      const breakStartTime = new Date().toISOString();
+      await supabaseApiClient.timeAction(user.id, 'start_break');
+      updateUserStatus('break', breakStartTime);
+      toast({
+        title: "Перерыв начат",
+        description: "Хорошего отдыха!",
+      });
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось начать перерыв",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleEndBreak = () => {
-    const breakDurationMinutes = Math.floor(breakDuration / 60);
-    updateUserStatus('working');
-    toast({
-      title: "Перерыв завершен",
-      description: `Перерыв длился ${breakDurationMinutes} минут`,
-    });
+  const handleEndBreak = async () => {
+    if (!user) return;
+    
+    try {
+      const breakDurationMinutes = Math.floor(breakDuration / 60);
+      await supabaseApiClient.timeAction(user.id, 'end_break', breakDuration);
+      updateUserStatus('working');
+      toast({
+        title: "Перерыв завершен",
+        description: `Перерыв длился ${breakDurationMinutes} минут`,
+      });
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось завершить перерыв",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleEndWork = () => {
-    updateUserStatus('offline');
-    toast({
-      title: "Рабочий день завершен",
-      description: "До свидания!",
-    });
+  const handleEndWork = async () => {
+    if (!user) return;
+    
+    try {
+      await supabaseApiClient.timeAction(user.id, 'end_work');
+      updateUserStatus('offline');
+      toast({
+        title: "Рабочий день завершен",
+        description: "До свидания!",
+      });
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось завершить работу",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleLogout = () => {
@@ -182,6 +228,7 @@ const Dashboard = () => {
                 <Settings className="w-4 h-4 mr-2" />Админ-панель
               </Button>
             )}
+            <ChangePasswordDialog userId={user.id} />
             <Button onClick={handleLogout} variant="outline" className="border-red-200 text-red-600 hover:bg-red-50">
               <LogOut className="w-4 h-4 mr-2" />Выйти
             </Button>
