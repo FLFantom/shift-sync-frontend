@@ -1,5 +1,6 @@
+
 import { useAuth } from '../contexts/AuthContext';
-import { useGetAllUsers, useUpdateUser, useDeleteUser } from '../hooks/useAdminApi';
+import { useGetAllUsers, useUpdateUser, useDeleteUser } from '../hooks/useSupabaseAdmin';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -8,6 +9,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Users, Settings, ArrowLeft, Trash2, Loader2, LogIn, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import UserDialog from '../components/UserDialog';
+import UserLogsDialog from '../components/UserLogsDialog';
+import AdminLogsDialog from '../components/AdminLogsDialog';
+import ResetPasswordDialog from '../components/ResetPasswordDialog';
 import React, { useCallback } from 'react';
 import { toast } from '@/hooks/use-toast';
 
@@ -150,6 +154,7 @@ const getStatusBadge = (status: string) => {
                 <ArrowLeft className="w-4 h-4 mr-2" />Вернуться к администратору
               </Button>
             )}
+            <AdminLogsDialog />
             <Button 
               onClick={handleManualRefresh} 
               variant="outline" 
@@ -280,6 +285,8 @@ const getStatusBadge = (status: string) => {
                             }} 
                             onSave={(userData) => handleUpdateUser(userData, employee.id)} 
                           />
+                          <UserLogsDialog userId={employee.id} userName={employee.name} />
+                          <ResetPasswordDialog userId={employee.id} userName={employee.name} />
                           <Button 
                             size="sm" 
                             variant="outline" 

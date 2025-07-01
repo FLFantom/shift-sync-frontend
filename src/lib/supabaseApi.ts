@@ -66,10 +66,16 @@ export class SupabaseApiClient {
       // Создаем токен (в реальном приложении используйте JWT)
       const token = btoa(JSON.stringify({ userId: userData.id, email: userData.email }));
 
+      // Приводим роль к правильному типу
+      const user: User = {
+        ...userData,
+        role: userData.role as 'user' | 'admin'
+      };
+
       return {
         success: true,
         data: {
-          user: userData,
+          user,
           token
         }
       };
@@ -121,10 +127,16 @@ export class SupabaseApiClient {
 
       const token = btoa(JSON.stringify({ userId: newUser.id, email: newUser.email }));
 
+      // Приводим роль к правильному типу
+      const user: User = {
+        ...newUser,
+        role: newUser.role as 'user' | 'admin'
+      };
+
       return {
         success: true,
         data: {
-          user: newUser,
+          user,
           token
         }
       };
@@ -150,7 +162,11 @@ export class SupabaseApiClient {
         return [];
       }
 
-      return data || [];
+      // Приводим роли к правильному типу
+      return (data || []).map(user => ({
+        ...user,
+        role: user.role as 'user' | 'admin'
+      }));
     } catch (error) {
       console.error('Get users error:', error);
       return [];
@@ -173,9 +189,15 @@ export class SupabaseApiClient {
         };
       }
 
+      // Приводим роль к правильному типу
+      const user: User = {
+        ...data,
+        role: data.role as 'user' | 'admin'
+      };
+
       return {
         success: true,
-        data
+        data: user
       };
     } catch (error) {
       console.error('Update user error:', error);
@@ -306,10 +328,14 @@ export class SupabaseApiClient {
         return [];
       }
 
-      return data?.map(log => ({
+      // Приводим роли к правильному типу
+      return (data || []).map(log => ({
         ...log,
-        user: log.users
-      })) || [];
+        user: {
+          ...log.users,
+          role: log.users.role as 'user' | 'admin'
+        }
+      }));
     } catch (error) {
       console.error('Get all logs error:', error);
       return [];
