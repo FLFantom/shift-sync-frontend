@@ -1,23 +1,22 @@
-import { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useTimeAction, useReportLateness, useNotifyBreakExceeded } from '../hooks/useTimeActions';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Play, Pause, Coffee, LogOut, Settings, ArrowLeft } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Clock, Coffee, LogOut, User, Play, Pause, Square, Settings, ArrowLeft, Timer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from '@/hooks/use-toast';
+import { supabaseApiClient } from '@/lib/supabaseApi';
+import ChangePasswordDialog from '@/components/ChangePasswordDialog';
 
 const Dashboard = () => {
   const { user, logout, updateUserStatus, isAdminMode, returnToAdmin } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [breakDuration, setBreakDuration] = useState('');
+  const [breakDuration, setBreakDuration] = useState(0);
+  const [workDuration, setWorkDuration] = useState(0);
+  const [workStartTime, setWorkStartTime] = useState<string | null>(null);
   const navigate = useNavigate();
-  const breakExceededNotifiedRef = useRef(false);
-  const breakIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  const timeActionMutation = useTimeAction();
-  const reportLatenessMutation = useReportLateness();
-  const notifyBreakExceededMutation = useNotifyBreakExceeded();
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -27,89 +26,48 @@ const Dashboard = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // Логика таймера перерыва
   useEffect(() => {
-    console.log('User status changed:', user?.status, 'Break start:', user?.breakStartTime);
-    
-    if (breakIntervalRef.current) {
-      clearInterval(breakIntervalRef.current);
-      breakIntervalRef.current = null;
-    }
-
     if (user?.status === 'break' && user.breakStartTime) {
-      const updateBreakDuration = () => {
+      const interval = setInterval(() => {
         const breakStart = new Date(user.breakStartTime!);
         const now = new Date();
-        const diff = Math.floor((now.getTime() - breakStart.getTime()) / 1000);
-        
-        const hours = Math.floor(diff / 3600);
-        const minutes = Math.floor((diff % 3600) / 60);
-        const seconds = diff % 60;
-        
-        const isOvertime = diff > 3600;
-        const sign = isOvertime ? '-' : '';
-        
-        const durationString = `${sign}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        setBreakDuration(durationString);
-        
-        const totalBreakMinutes = Math.floor(diff / 60);
-        if (totalBreakMinutes > 60 && !breakExceededNotifiedRef.current && user) {
-          breakExceededNotifiedRef.current = true;
-          notifyBreakExceededMutation.mutate({
-            userId: user.id,
-            userName: user.name,
-            userEmail: user.email,
-            breakDurationMinutes: totalBreakMinutes
-          });
-        }
-      };
+        const duration = Math.floor((now.getTime() - breakStart.getTime()) / 1000);
+        setBreakDuration(duration);
+      }, 1000);
 
-      updateBreakDuration();
-      breakIntervalRef.current = setInterval(updateBreakDuration, 1000);
-      console.log('Break timer started');
+      return () => clearInterval(interval);
     } else {
-      setBreakDuration('');
-      breakExceededNotifiedRef.current = false;
-      console.log('Break timer stopped');
+      setBreakDuration(0);
     }
+  }, [user?.status, user?.breakStartTime]);
 
-    return () => {
-      if (breakIntervalRef.current) {
-        clearInterval(breakIntervalRef.current);
-        breakIntervalRef.current = null;
-      }
-    };
-  }, [user?.status, user?.breakStartTime, user, notifyBreakExceededMutation]);
-
+  // Логика таймера работы
   useEffect(() => {
-    if (user?.breakStartTime) {
-      const breakStart = new Date(user.breakStartTime);
-      const now = new Date();
+    if (user?.status === 'working') {
+      // Проверяем, есть ли сохраненное время начала работы за сегодня
+      const today = new Date().toDateString();
+      const savedWorkStart = localStorage.getItem(`workStartTime_${user.id}_${today}`);
       
-      const isDifferentDay = breakStart.getFullYear() !== now.getFullYear() ||
-                           breakStart.getMonth() !== now.getMonth() ||
-                           breakStart.getDate() !== now.getDate();
-      
-      if (isDifferentDay) {
-        breakExceededNotifiedRef.current = false;
+      if (savedWorkStart) {
+        setWorkStartTime(savedWorkStart);
       }
+
+      const interval = setInterval(() => {
+        const workStart = savedWorkStart || workStartTime;
+        if (workStart) {
+          const start = new Date(workStart);
+          const now = new Date();
+          const duration = Math.floor((now.getTime() - start.getTime()) / 1000);
+          setWorkDuration(duration);
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    } else {
+      setWorkDuration(0);
     }
-  }, [user?.breakStartTime]);
-
-  const getGreeting = () => {
-    const hour = currentTime.getHours();
-    if (hour < 12) return 'Доброе утро';
-    if (hour < 18) return 'Добрый день';
-    return 'Добрый вечер';
-  };
-
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('ru-RU', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
+  }, [user?.status, workStartTime, user?.id]);
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('ru-RU', {
@@ -119,89 +77,59 @@ const Dashboard = () => {
     });
   };
 
-  const calculateBreakDurationInMinutes = () => {
-    if (!user?.breakStartTime) return 0;
-    const breakStart = new Date(user.breakStartTime);
-    const now = new Date();
-    return Math.floor((now.getTime() - breakStart.getTime()) / (1000 * 60));
+  const formatDuration = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}ч ${minutes}м ${secs}с`;
+    } else if (minutes > 0) {
+      return `${minutes}м ${secs}с`;
+    } else {
+      return `${secs}с`;
+    }
   };
 
   const handleStartWork = async () => {
-    if (!user || user.status === 'working') {
-      console.log('User already working or user not found');
-      return;
-    }
-
+    if (!user) return;
+    
     try {
-      const startTime = new Date();
+      const now = new Date().toISOString();
+      const today = new Date().toDateString();
       
-      console.log('Sending start_work action');
-      
-      await timeActionMutation.mutateAsync({
-        action: 'end_break',
-        break_duration: breakDurationMinutes
-      });
-      
+      await supabaseApiClient.timeAction(user.id, 'start_work');
       updateUserStatus('working');
       
-      const workStartTime = startTime.getHours() * 3600 + startTime.getMinutes() * 60 + startTime.getSeconds();
-      const nineAM = 9 * 3600;
+      // Сохраняем время начала работы
+      setWorkStartTime(now);
+      localStorage.setItem(`workStartTime_${user.id}_${today}`, now);
       
-      if (workStartTime > nineAM) {
-        const lateSeconds = workStartTime - nineAM;
-        const lateMinutes = Math.floor(lateSeconds / 60);
-        
-        reportLatenessMutation.mutate({
-          userId: user.id,
-          userName: user.name,
-          userEmail: user.email,
-          startTime: formatTime(startTime),
-          lateMinutes: lateMinutes
-        });
-        
-        toast({
-          title: "Опоздание зафиксировано",
-          description: `Вы опоздали на ${lateMinutes} минут. Уведомление отправлено руководителю.`,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Работа начата",
-          description: "Удачного рабочего дня!",
-        });
-      }
+      toast({
+        title: "Работа начата",
+        description: "Удачного рабочего дня!",
+      });
     } catch (error) {
-      console.error('Start work error:', error);
       toast({
         title: "Ошибка",
-        description: "Не удалось начать рабочий день",
+        description: "Не удалось начать работу",
         variant: "destructive",
       });
     }
   };
 
   const handleStartBreak = async () => {
-    if (!user || user.status !== 'working') {
-      console.log('User not working or user not found');
-      return;
-    }
-
+    if (!user) return;
+    
     try {
-      console.log('Sending start_break action');
-      
-      await timeActionMutation.mutateAsync({ 
-        action: 'start_break'
-      });
-      
       const breakStartTime = new Date().toISOString();
+      await supabaseApiClient.timeAction(user.id, 'start_break');
       updateUserStatus('break', breakStartTime);
-      
       toast({
         title: "Перерыв начат",
-        description: "Отдыхайте, но не забывайте о времени!",
+        description: "Хорошего отдыха!",
       });
     } catch (error) {
-      console.error('Start break error:', error);
       toast({
         title: "Ошибка",
         description: "Не удалось начать перерыв",
@@ -211,37 +139,17 @@ const Dashboard = () => {
   };
 
   const handleEndBreak = async () => {
-    if (!user || user.status !== 'break') {
-      console.log('User not on break or user not found');
-      return;
-    }
-
+    if (!user) return;
+    
     try {
-      const breakDurationMinutes = calculateBreakDurationInMinutes();
-      
-      console.log('Sending end_break action with breakDuration:', breakDurationMinutes);
-      
-      await timeActionMutation.mutateAsync({
-        action: 'end_break',
-        break_duration: breakDurationMinutes
-      });
-      
-      if (breakIntervalRef.current) {
-        clearInterval(breakIntervalRef.current);
-        breakIntervalRef.current = null;
-      }
-      
-      setBreakDuration('');
-      breakExceededNotifiedRef.current = false;
-      
+      const breakDurationMinutes = Math.floor(breakDuration / 60);
+      await supabaseApiClient.timeAction(user.id, 'end_break', breakDuration);
       updateUserStatus('working');
-      
       toast({
-        title: "Перерыв окончен",
-        description: "Добро пожаловать обратно!",
+        title: "Перерыв завершен",
+        description: `Перерыв длился ${breakDurationMinutes} минут`,
       });
     } catch (error) {
-      console.error('End break error:', error);
       toast({
         title: "Ошибка",
         description: "Не удалось завершить перерыв",
@@ -251,27 +159,25 @@ const Dashboard = () => {
   };
 
   const handleEndWork = async () => {
-    if (!user || user.status === 'offline') {
-      console.log('User already offline or user not found');
-      return;
-    }
-
+    if (!user) return;
+    
     try {
-      console.log('Sending end_work action');
-      
-      await timeActionMutation.mutateAsync({ 
-        action: 'end_work'
-      });
+      await supabaseApiClient.timeAction(user.id, 'end_work');
       updateUserStatus('offline');
+      
+      // Очищаем время начала работы
+      const today = new Date().toDateString();
+      localStorage.removeItem(`workStartTime_${user.id}_${today}`);
+      setWorkStartTime(null);
+      
       toast({
-        title: "Рабочий день окончен",
-        description: "Хорошего отдыха!",
+        title: "Рабочий день завершен",
+        description: "До свидания!",
       });
     } catch (error) {
-      console.error('End work error:', error);
       toast({
         title: "Ошибка",
-        description: "Не удалось завершить рабочий день",
+        description: "Не удалось завершить работу",
         variant: "destructive",
       });
     }
@@ -282,209 +188,181 @@ const Dashboard = () => {
     navigate('/login');
   };
 
-  const handleReturnToAdmin = () => {
-    returnToAdmin();
-    navigate('/admin-panel');
+  const getStatusBadge = () => {
+    switch (user?.status) {
+      case 'working':
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">На работе</Badge>;
+      case 'break':
+        return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">На перерыве</Badge>;
+      default:
+        return <Badge variant="secondary">Не в сети</Badge>;
+    }
   };
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Загрузка...</h2>
+        </div>
+      </div>
+    );
+  }
 
-  const isBreakOvertime = user.status === 'break' && user.breakStartTime && 
-    (new Date().getTime() - new Date(user.breakStartTime).getTime()) > 3600000;
+  const status = user?.status || 'offline';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              {getGreeting()}, {user.name}!
-            </h1>
-            <p className="text-gray-600 mt-1">
-              {formatDate(currentTime)}
-            </p>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            {isAdminMode && (
-              <Button
-                onClick={handleReturnToAdmin}
-                className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Вернуться в админ-панель
-              </Button>
-            )}
-            {user.role === 'admin' && !isAdminMode && (
-              <Button
-                onClick={() => navigate('/admin-panel')}
-                variant="outline"
-                className="border-blue-200 text-blue-600 hover:bg-blue-50"
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Админ-панель
-              </Button>
-            )}
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              className="border-red-200 text-red-600 hover:bg-red-50"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Выйти
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      {/* Header with buttons */}
+      <div className="flex justify-between items-center p-4">
+        <div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            {user.role === 'admin' ? 'Админ панель' : `Привет, ${user.name}!`}
+          </h1>
+          <p className="text-gray-600 mt-1">{new Date().toLocaleDateString('ru-RU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        </div>
+        <div className="flex items-center space-x-2">
+          {isAdminMode && (
+            <Button onClick={() => { returnToAdmin(); }} variant="outline" size="sm" className="border-purple-200 text-purple-600 hover:bg-purple-50">
+              <ArrowLeft className="w-4 h-4 mr-2" />Вернуться к администратору
             </Button>
+          )}
+          {user.role === 'admin' && (
+            <Button onClick={() => navigate('/admin-panel')} variant="outline" className="border-blue-200 text-blue-600 hover:bg-blue-50">
+              <Settings className="w-4 h-4 mr-2" />Админ-панель
+            </Button>
+          )}
+          <ChangePasswordDialog userId={user.id} />
+          <Button onClick={handleLogout} variant="outline" className="border-red-200 text-red-600 hover:bg-red-50">
+            <LogOut className="w-4 h-4 mr-2" />Выйти
+          </Button>
+        </div>
+      </div>
+
+      {/* Main content area */}
+      <div className="flex items-center justify-center min-h-[calc(100vh-120px)] p-4">
+        <div className="w-full max-w-4xl">
+          
+          {/* Current time card */}
+          <div className="text-center mb-8">
+            <div className="inline-block bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border border-white/20">
+              <Clock className="w-16 h-16 mx-auto mb-4 text-blue-600" />
+              <div className="text-6xl font-bold text-gray-800 mb-2">
+                {formatTime(currentTime)}
+              </div>
+              <div className="text-blue-600 text-lg font-medium flex items-center justify-center gap-2">
+                <User className="w-5 h-5" />
+                Статус: {getStatusBadge()}
+              </div>
+            </div>
+          </div>
+
+          {/* Break timer if on break */}
+          {status === 'break' && (
+            <div className="text-center mb-8">
+              <div className="inline-block bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-3xl shadow-2xl p-6 border border-white/20">
+                <Coffee className="w-12 h-12 mx-auto mb-4" />
+                <div className="text-4xl font-bold mb-2">
+                  {formatDuration(breakDuration)}
+                </div>
+                <div className="text-orange-100">
+                  {breakDuration > 3600 ? (
+                    <span className="font-bold">⚠️ Превышено время перерыва!</span>
+                  ) : (
+                    'Хорошего отдыха!'
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Action cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+            {status === 'offline' && (
+              <Card 
+                className="bg-gradient-to-br from-green-500 to-green-600 text-white shadow-2xl border-0 cursor-pointer hover:shadow-3xl hover:scale-105 transition-all duration-300 rounded-3xl" 
+                onClick={handleStartWork}
+              >
+                <CardContent className="p-8 text-center">
+                  <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Play className="w-10 h-10" />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-3">Начать работу</h3>
+                  <p className="text-green-100 mb-6">Зафиксировать начало рабочего дня</p>
+                  <Button className="bg-white text-green-600 hover:bg-gray-100 w-full font-semibold py-3 rounded-xl">
+                    Начать работу
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+            
+            {status === 'working' && (
+              <>
+                <Card 
+                  className="bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-2xl border-0 cursor-pointer hover:shadow-3xl hover:scale-105 transition-all duration-300 rounded-3xl" 
+                  onClick={handleStartBreak}
+                >
+                  <CardContent className="p-8 text-center">
+                    <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Pause className="w-10 h-10" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-3">Перерыв</h3>
+                    <p className="text-orange-100 mb-6">Зафиксировать начало перерыва</p>
+                    <Button className="bg-white text-orange-600 hover:bg-gray-100 w-full font-semibold py-3 rounded-xl">
+                      Начать перерыв
+                    </Button>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-white/90 backdrop-blur-sm shadow-2xl border-0 hover:shadow-3xl hover:scale-105 transition-all duration-300 rounded-3xl">
+                  <CardContent className="p-8 text-center">
+                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Square className="w-10 h-10 text-gray-600" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-3 text-gray-800">Завершить работу</h3>
+                    <p className="text-gray-600 mb-6">Зафиксировать конец рабочего дня</p>
+                    <Button onClick={handleEndWork} variant="outline" className="w-full py-3 rounded-xl border-2">
+                      Завершить работу
+                    </Button>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+            
+            {status === 'break' && (
+              <>
+                <Card 
+                  className="bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-2xl border-0 cursor-pointer hover:shadow-3xl hover:scale-105 transition-all duration-300 rounded-3xl" 
+                  onClick={handleEndBreak}
+                >
+                  <CardContent className="p-8 text-center">
+                    <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Play className="w-10 h-10" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-3">Вернуться к работе</h3>
+                    <p className="text-blue-100 mb-6">Завершить перерыв</p>
+                    <Button className="bg-white text-blue-600 hover:bg-gray-100 w-full font-semibold py-3 rounded-xl">
+                      Вернуться к работе
+                    </Button>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-white/90 backdrop-blur-sm shadow-2xl border-0 hover:shadow-3xl hover:scale-105 transition-all duration-300 rounded-3xl">
+                  <CardContent className="p-8 text-center">
+                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Square className="w-10 h-10 text-gray-600" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-3 text-gray-800">Завершить работу</h3>
+                    <p className="text-gray-600 mb-6">Зафиксировать конец рабочего дня</p>
+                    <Button onClick={handleEndWork} variant="outline" className="w-full py-3 rounded-xl border-2">
+                      Завершить работу
+                    </Button>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
         </div>
-
-        {/* Current Time */}
-        <Card className="mb-8 bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-0 shadow-xl">
-          <CardContent className="text-center py-8">
-            <Clock className="w-16 h-16 mx-auto mb-4 opacity-90" />
-            <div className="text-5xl font-bold mb-2">
-              {formatTime(currentTime)}
-            </div>
-            <div className="text-blue-100 text-lg">
-              Текущее время
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Status and Actions */}
-        {user.status === 'break' ? (
-          <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl text-orange-600 flex items-center justify-center">
-                <Coffee className="w-8 h-8 mr-3" />
-                Вы на перерыве
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-center space-y-6">
-              <div className={`text-6xl font-bold ${isBreakOvertime ? 'text-red-500' : 'text-orange-500'}`}>
-                {breakDuration}
-              </div>
-              {isBreakOvertime && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
-                  <p className="text-red-700 font-medium">
-                    ⚠️ Перерыв превысил 1 час
-                  </p>
-                </div>
-              )}
-              <div className="flex justify-center space-x-4">
-                <Button
-                  onClick={handleEndBreak}
-                  size="lg"
-                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8 py-4 text-lg font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                  disabled={timeActionMutation.isPending}
-                >
-                  <Play className="w-6 h-6 mr-3" />
-                  Закончить перерыв
-                </Button>
-                <Button
-                  onClick={handleEndWork}
-                  size="lg"
-                  variant="outline"
-                  className="border-gray-300 text-gray-700 hover:bg-gray-50 px-8 py-4 text-lg font-medium rounded-xl"
-                  disabled={timeActionMutation.isPending}
-                >
-                  Завершить рабочий день
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid md:grid-cols-3 gap-6">
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-              <CardContent className="text-center py-8 px-4 flex flex-col justify-between h-full min-h-[320px]">
-                <div className="flex flex-col items-center flex-grow">
-                  <div className="w-20 h-20 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Play className="w-10 h-10 text-white" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800 mb-4">
-                    Начать работу
-                  </h3>
-                  <p className="text-gray-600 mb-6 flex-grow flex items-center">
-                    Зафиксировать начало рабочего дня
-                  </p>
-                </div>
-                <Button
-                  onClick={handleStartWork}
-                  size="lg"
-                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-4 text-base font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 w-full"
-                  disabled={timeActionMutation.isPending || user.status === 'working'}
-                >
-                  {user.status === 'working' ? 'Уже работаете' : 'Начать работу'}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-              <CardContent className="text-center py-8 px-4 flex flex-col justify-between h-full min-h-[320px]">
-                <div className="flex flex-col items-center flex-grow">
-                  <div className="w-20 h-20 bg-gradient-to-r from-orange-400 to-yellow-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Pause className="w-10 h-10 text-white" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800 mb-4">
-                    Перерыв
-                  </h3>
-                  <p className="text-gray-600 mb-6 flex-grow flex items-center">
-                    Зафиксировать начало перерыва
-                  </p>
-                </div>
-                <Button
-                  onClick={handleStartBreak}
-                  size="lg"
-                  className="bg-gradient-to-r from-orange-500 to-yellow-600 hover:from-orange-600 hover:to-yellow-700 text-white px-6 py-4 text-base font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 w-full"
-                  disabled={timeActionMutation.isPending || user.status !== 'working'}
-                >
-                  {user.status !== 'working' ? 'Сначала начните работу' : 'Начать перерыв'}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/80 backdrop-blur-sm shadow-xl border-0 hover:shadow-2xl transition-all duration-300">
-              <CardContent className="text-center py-8 px-4 flex flex-col justify-between h-full min-h-[320px]">
-                <div className="flex flex-col items-center flex-grow">
-                  <div className="w-20 h-20 bg-gradient-to-r from-red-400 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Clock className="w-10 h-10 text-white" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800 mb-4">
-                    Завершить день
-                  </h3>
-                  <p className="text-gray-600 mb-6 flex-grow flex items-center">
-                    Зафиксировать окончание рабочего дня
-                  </p>
-                </div>
-                <Button
-                  onClick={handleEndWork}
-                  size="lg"
-                  className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white px-6 py-4 text-base font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 w-full"
-                  disabled={timeActionMutation.isPending || user.status === 'offline'}
-                >
-                  {user.status === 'offline' ? 'День завершен' : 'Завершить день'}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Current Status */}
-        <Card className="mt-8 bg-white/80 backdrop-blur-sm shadow-xl border-0">
-          <CardContent className="py-6">
-            <div className="flex items-center justify-center space-x-4">
-              <div className={`w-3 h-3 rounded-full ${
-                user.status === 'working' ? 'bg-green-500' : 
-                user.status === 'break' ? 'bg-orange-500' : 'bg-gray-500'
-              }`}></div>
-              <span className="text-lg font-medium text-gray-700">
-                Статус: {
-                  user.status === 'working' ? 'На работе' :
-                  user.status === 'break' ? 'На перерыве' : 'Не в сети'
-                }
-              </span>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

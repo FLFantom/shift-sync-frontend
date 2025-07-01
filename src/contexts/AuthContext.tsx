@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User } from '../lib/api';
-import { apiClient } from '../lib/api';
+import { User } from '../lib/supabaseApi';
+import { supabaseApiClient } from '../lib/supabaseApi';
 
 interface AuthContextType {
   user: User | null;
@@ -75,28 +75,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let targetUser: User;
 
       try {
-        // Пытаемся получить реальные данные пользователя из API
-        console.log('Получение данных пользователя из API...');
-        const allUsers = await apiClient.getAllUsers();
+        // Получаем реальные данные пользователя из Supabase
+        console.log('Получение данных пользователя из Supabase...');
+        const allUsers = await supabaseApiClient.getAllUsers();
         const foundUser = allUsers.find(u => u.id.toString() === userId);
         
         if (foundUser) {
           targetUser = foundUser;
-          console.log('Найден пользователь в API:', foundUser.name);
+          console.log('Найден пользователь в Supabase:', foundUser.name);
         } else {
-          throw new Error('Пользователь не найден в API');
+          throw new Error('Пользователь не найден в Supabase');
         }
       } catch (apiError) {
-        console.warn('Не удалось получить данные из API, используем заглушку:', apiError);
-        
-        // Используем заглушку если API недоступен
-        targetUser = {
-          id: parseInt(userId),
-          email: `user${userId}@example.com`,
-          name: `Пользователь ${userId}`,
-          role: 'user',
-          status: 'offline'
-        };
+        console.warn('Не удалось получить данные из Supabase:', apiError);
+        return false;
       }
 
       // Переключаемся на целевого пользователя
@@ -170,53 +162,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Логика управления временем перерыва
       if (status === 'break') {
-        // Если это новый перерыв и передано время начала
         if (breakStartTime) {
           updatedUser.breakStartTime = breakStartTime;
           console.log('Установлено новое время начала перерыва:', breakStartTime);
-        }
-        // Если пользователь уже был на перерыве и возвращается с паузы,
-        // сохраняем старое время начала перерыва
-        else if (prevUser.status === 'break' && prevUser.breakStartTime) {
+        } else if (prevUser.status === 'break' && prevUser.breakStartTime) {
           updatedUser.breakStartTime = prevUser.breakStartTime;
           console.log('Продолжение существующего перерыва');
-        }
-        // Если пользователь переходит в перерыв впервые за день
-        else if (prevUser.status !== 'break') {
-          // Проверяем, есть ли сохраненное время перерыва за сегодня
+        } else if (prevUser.status !== 'break') {
           const savedBreakTime = localStorage.getItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`);
           if (savedBreakTime) {
-            // Если есть сохраненное время за сегодня, используем его
             updatedUser.breakStartTime = savedBreakTime;
             console.log('Восстановлено время перерыва за сегодня:', savedBreakTime);
           } else {
-            // Если нет сохраненного времени, устанавливаем текущее время
             const newBreakTime = new Date().toISOString();
             updatedUser.breakStartTime = newBreakTime;
-            // Сохраняем время начала перерыва за сегодня
             localStorage.setItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`, newBreakTime);
             console.log('Установлено новое время начала перерыва:', newBreakTime);
           }
         }
       } else if (status === 'working') {
-        // Когда пользователь возвращается к работе, не удаляем время перерыва
-        // Это позволит продолжить отсчет при следующем перерыве
-        // Время перерыва будет очищено только в начале нового дня
         if (prevUser.breakStartTime) {
-          // Сохраняем время перерыва для возможного продолжения
           localStorage.setItem(`breakStartTime_${prevUser.id}_${new Date().toDateString()}`, prevUser.breakStartTime);
         }
-        updatedUser.breakStartTime = prevUser.breakStartTime; // Сохраняем время
+        updatedUser.breakStartTime = prevUser.breakStartTime;
         console.log('Возврат к работе, время перерыва сохранено');
       } else {
-        // Для статуса 'offline' также сохраняем время перерыва
         updatedUser.breakStartTime = prevUser.breakStartTime;
         console.log('Переход в оффлайн, время перерыва сохранено');
       }
       
-      // Сохраняем обновленного пользователя в localStorage
       localStorage.setItem('user', JSON.stringify(updatedUser));
-      
       return updatedUser;
     });
   };
