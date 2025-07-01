@@ -58,16 +58,6 @@ export interface UserLog {
   email: string;
 }
 
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
-
-interface RawUser extends Partial<User> {
-  [key: string]: unknown;
-}
-
 // Custom error types
 export class AuthError extends Error {
   constructor(message: string, public status: number) {

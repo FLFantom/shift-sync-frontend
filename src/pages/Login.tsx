@@ -1,8 +1,7 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { supabaseApiClient } from '../lib/supabaseApi';
+import { apiClient } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -83,7 +82,7 @@ const Login = () => {
     try {
       console.log('Attempting login with:', { email: email.trim() });
       
-      const response = await supabaseApiClient.login({ 
+      const response = await apiClient.login({ 
         email: email.trim().toLowerCase(), 
         password: password 
       });
@@ -288,6 +287,15 @@ const Login = () => {
               )}
             </Button>
           </form>
+
+          {/* Дополнительная информация для разработки */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+              <p className="text-xs text-gray-600 mb-2">Тестовые учетные данные:</p>
+              <p className="text-xs text-gray-500">Admin: admin@example.com</p>
+              <p className="text-xs text-gray-500">User: user@example.com</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
