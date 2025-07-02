@@ -42,6 +42,14 @@ export interface ApiResponse<T> {
 // JWT Secret (в реальном приложении должен быть в переменных окружения)
 const JWT_SECRET = '23GP3dGQZyyHLQSOwJ9CEOTJ7YpMTrChbnwztDRI';
 
+// Функция для безопасного приведения статуса к нужному типу
+const normalizeStatus = (status: string | null): 'working' | 'break' | 'offline' => {
+  if (status === 'working' || status === 'break' || status === 'offline') {
+    return status;
+  }
+  return 'offline';
+};
+
 export class SupabaseApiClient {
   // Генерация JWT токена
   private generateJWT(user: User): string {
@@ -90,6 +98,7 @@ export class SupabaseApiClient {
       const user: User = {
         ...userData,
         role: userData.role as 'user' | 'admin',
+        status: normalizeStatus(userData.status),
         breakStartTime: userData.break_start_time
       };
 
@@ -188,7 +197,8 @@ export class SupabaseApiClient {
 
       const user: User = {
         ...newUser,
-        role: newUser.role as 'user' | 'admin'
+        role: newUser.role as 'user' | 'admin',
+        status: normalizeStatus(newUser.status)
       };
 
       const token = this.generateJWT(user);
@@ -223,7 +233,8 @@ export class SupabaseApiClient {
 
       return (data || []).map(user => ({
         ...user,
-        role: user.role as 'user' | 'admin'
+        role: user.role as 'user' | 'admin',
+        status: normalizeStatus(user.status)
       }));
     } catch (error) {
       console.error('Get users error:', error);
@@ -249,7 +260,8 @@ export class SupabaseApiClient {
 
       const user: User = {
         ...data,
-        role: data.role as 'user' | 'admin'
+        role: data.role as 'user' | 'admin',
+        status: normalizeStatus(data.status)
       };
 
       return {
@@ -403,7 +415,8 @@ export class SupabaseApiClient {
         ...log,
         user: {
           ...log.users,
-          role: log.users.role as 'user' | 'admin'
+          role: log.users.role as 'user' | 'admin',
+          status: normalizeStatus(log.users.status)
         }
       }));
     } catch (error) {
