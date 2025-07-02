@@ -5,16 +5,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Loader2 } from 'lucide-react';
-import { useGetUserLogs } from '../hooks/useAdminApi';
+import { useGetUserLogs } from '../hooks/useSupabaseAdmin';
 
 interface UserLogsDialogProps {
-  userId: string;
+  userId: number;
   userName: string;
 }
 
 const UserLogsDialog = ({ userId, userName }: UserLogsDialogProps) => {
   const [open, setOpen] = useState(false);
-  const { data: logs, isLoading, error } = useGetUserLogs(open ? userId : '');
+  const { data: logs, isLoading, error } = useGetUserLogs(open ? userId : 0);
 
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleString('ru-RU');
@@ -33,6 +33,14 @@ const UserLogsDialog = ({ userId, userName }: UserLogsDialogProps) => {
       default:
         return <Badge variant="secondary">{action}</Badge>;
     }
+  };
+
+  const getBreakDurationText = (action: string, breakDuration?: number) => {
+    if (action === 'end_break' && breakDuration) {
+      const minutes = Math.floor(breakDuration / 60);
+      return `Длительность: ${minutes} мин`;
+    }
+    return '—';
   };
 
   return (
@@ -85,7 +93,7 @@ const UserLogsDialog = ({ userId, userName }: UserLogsDialogProps) => {
                   <TableCell>{formatDate(log.timestamp)}</TableCell>
                   <TableCell>{getActionBadge(log.action)}</TableCell>
                   <TableCell className="text-gray-600">
-                    {log.details || '—'}
+                    {getBreakDurationText(log.action, log.break_duration)}
                   </TableCell>
                 </TableRow>
               ))}
