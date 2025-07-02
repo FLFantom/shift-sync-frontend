@@ -1,5 +1,5 @@
-
 import { supabase } from '@/integrations/supabase/client';
+import { sign, verify } from 'jsonwebtoken';
 
 export interface User {
   id: number;
@@ -37,11 +37,34 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+// JWT Secret (в реальном приложении должен быть в переменных окружения)
+const JWT_SECRET = 'your-jwt-secret-key-2024';
+
 export class SupabaseApiClient {
-  // Авторизация
+  // Генерация JWT токена
+  private generateJWT(user: User): string {
+    const payload = {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 часа
+    };
+    return sign(payload, JWT_SECRET);
+  }
+
+  // Проверка JWT токена
+  private verifyJWT(token: string): any {
+    try {
+      return verify(token, JWT_SECRET);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // Авторизация с JWT
   async login(credentials: LoginRequest): Promise<ApiResponse<{ user: User; token: string }>> {
     try {
-      // Получаем пользователя из таблицы users
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
@@ -55,7 +78,6 @@ export class SupabaseApiClient {
         };
       }
 
-      // Простая проверка пароля (в реальном приложении используйте хеширование)
       if (userData.password !== credentials.password) {
         return {
           success: false,
@@ -63,14 +85,13 @@ export class SupabaseApiClient {
         };
       }
 
-      // Создаем токен (в реальном приложении используйте JWT)
-      const token = btoa(JSON.stringify({ userId: userData.id, email: userData.email }));
-
-      // Приводим роль к правильному типу
       const user: User = {
         ...userData,
         role: userData.role as 'user' | 'admin'
       };
+
+      // Генерируем JWT токен
+      const token = this.generateJWT(user);
 
       return {
         success: true,
@@ -88,9 +109,38 @@ export class SupabaseApiClient {
     }
   }
 
+  // Обновление статуса пользователя
+  async updateUserStatus(userId: number, status: 'working' | 'break' | 'offline'): Promise<ApiResponse<void>> {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          status: status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) {
+        return {
+          success: false,
+          error: 'Ошибка обновления статуса'
+        };
+      }
+
+      return {
+        success: true
+      };
+    } catch (error) {
+      console.error('Update status error:', error);
+      return {
+        success: false,
+        error: 'Ошибка обновления статуса'
+      };
+    }
+  }
+
   async register(userData: RegisterRequest): Promise<ApiResponse<{ user: User; token: string }>> {
     try {
-      // Проверяем, существует ли пользователь
       const { data: existingUser } = await supabase
         .from('users')
         .select('id')
@@ -104,15 +154,15 @@ export class SupabaseApiClient {
         };
       }
 
-      // Создаем нового пользователя
       const { data: newUser, error } = await supabase
         .from('users')
         .insert([
           {
             email: userData.email.toLowerCase(),
             name: userData.name,
-            password: userData.password, // В реальном приложении хешируйте пароль
-            role: 'user'
+            password: userData.password,
+            role: 'user',
+            status: 'offline'
           }
         ])
         .select()
@@ -125,13 +175,12 @@ export class SupabaseApiClient {
         };
       }
 
-      const token = btoa(JSON.stringify({ userId: newUser.id, email: newUser.email }));
-
-      // Приводим роль к правильному типу
       const user: User = {
         ...newUser,
         role: newUser.role as 'user' | 'admin'
       };
+
+      const token = this.generateJWT(user);
 
       return {
         success: true,
@@ -149,7 +198,6 @@ export class SupabaseApiClient {
     }
   }
 
-  // Управление пользователями (для админов)
   async getAllUsers(): Promise<User[]> {
     try {
       const { data, error } = await supabase
@@ -162,7 +210,6 @@ export class SupabaseApiClient {
         return [];
       }
 
-      // Приводим роли к правильному типу
       return (data || []).map(user => ({
         ...user,
         role: user.role as 'user' | 'admin'
@@ -189,7 +236,6 @@ export class SupabaseApiClient {
         };
       }
 
-      // Приводим роль к правильному типу
       const user: User = {
         ...data,
         role: data.role as 'user' | 'admin'
@@ -234,9 +280,17 @@ export class SupabaseApiClient {
     }
   }
 
-  // Управление временем
   async timeAction(userId: number, action: 'start_work' | 'start_break' | 'end_break' | 'end_work', breakDuration?: number): Promise<ApiResponse<TimeLog>> {
     try {
+      // Обновляем статус пользователя в базе данных
+      let newStatus: 'working' | 'break' | 'offline' = 'offline';
+      if (action === 'start_work') newStatus = 'working';
+      else if (action === 'start_break') newStatus = 'break';
+      else if (action === 'end_break') newStatus = 'working';
+      else if (action === 'end_work') newStatus = 'offline';
+
+      await this.updateUserStatus(userId, newStatus);
+
       const { data, error } = await supabase
         .from('time_logs')
         .insert([
@@ -309,7 +363,8 @@ export class SupabaseApiClient {
             id,
             name,
             email,
-            role
+            role,
+            status
           )
         `);
 
@@ -328,7 +383,6 @@ export class SupabaseApiClient {
         return [];
       }
 
-      // Приводим роли к правильному типу
       return (data || []).map(log => ({
         ...log,
         user: {
@@ -342,10 +396,8 @@ export class SupabaseApiClient {
     }
   }
 
-  // Смена пароля
   async changePassword(userId: number, currentPassword: string, newPassword: string): Promise<ApiResponse<void>> {
     try {
-      // Проверяем текущий пароль
       const { data: user, error: userError } = await supabase
         .from('users')
         .select('password')
@@ -366,7 +418,6 @@ export class SupabaseApiClient {
         };
       }
 
-      // Обновляем пароль
       const { error } = await supabase
         .from('users')
         .update({ password: newPassword })
@@ -391,7 +442,6 @@ export class SupabaseApiClient {
     }
   }
 
-  // Сброс пароля (для админов)
   async resetPassword(userId: number, newPassword: string): Promise<ApiResponse<void>> {
     try {
       const { error } = await supabase
