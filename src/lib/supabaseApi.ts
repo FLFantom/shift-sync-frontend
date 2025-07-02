@@ -38,7 +38,7 @@ export interface ApiResponse<T> {
 }
 
 // JWT Secret (в реальном приложении должен быть в переменных окружения)
-const JWT_SECRET = 'your-jwt-secret-key-2024';
+const JWT_SECRET = '23GP3dGQZyyHLQSOwJ9CEOTJ7YpMTrChbnwztDRI';
 
 export class SupabaseApiClient {
   // Генерация JWT токена
