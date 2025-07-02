@@ -43,30 +43,36 @@ export type Database = {
       }
       users: {
         Row: {
+          break_start_time: string | null
           created_at: string | null
           email: string
           id: number
           name: string
           password: string
           role: string | null
+          status: string | null
           updated_at: string | null
         }
         Insert: {
+          break_start_time?: string | null
           created_at?: string | null
           email: string
           id?: number
           name: string
           password: string
           role?: string | null
+          status?: string | null
           updated_at?: string | null
         }
         Update: {
+          break_start_time?: string | null
           created_at?: string | null
           email?: string
           id?: number
           name?: string
           password?: string
           role?: string | null
+          status?: string | null
           updated_at?: string | null
         }
         Relationships: []

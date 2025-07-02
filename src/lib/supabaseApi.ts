@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { sign, verify } from 'jsonwebtoken';
 
@@ -8,6 +9,7 @@ export interface User {
   role: 'user' | 'admin';
   status?: 'working' | 'break' | 'offline';
   breakStartTime?: string;
+  break_start_time?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -87,7 +89,8 @@ export class SupabaseApiClient {
 
       const user: User = {
         ...userData,
-        role: userData.role as 'user' | 'admin'
+        role: userData.role as 'user' | 'admin',
+        breakStartTime: userData.break_start_time
       };
 
       // Генерируем JWT токен
@@ -110,14 +113,22 @@ export class SupabaseApiClient {
   }
 
   // Обновление статуса пользователя
-  async updateUserStatus(userId: number, status: 'working' | 'break' | 'offline'): Promise<ApiResponse<void>> {
+  async updateUserStatus(userId: number, status: 'working' | 'break' | 'offline', breakStartTime?: string): Promise<ApiResponse<void>> {
     try {
+      const updateData: any = { 
+        status: status,
+        updated_at: new Date().toISOString()
+      };
+
+      if (status === 'break' && breakStartTime) {
+        updateData.break_start_time = breakStartTime;
+      } else if (status !== 'break') {
+        updateData.break_start_time = null;
+      }
+
       const { error } = await supabase
         .from('users')
-        .update({ 
-          status: status,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', userId);
 
       if (error) {
@@ -284,12 +295,17 @@ export class SupabaseApiClient {
     try {
       // Обновляем статус пользователя в базе данных
       let newStatus: 'working' | 'break' | 'offline' = 'offline';
+      let breakStartTime: string | undefined;
+
       if (action === 'start_work') newStatus = 'working';
-      else if (action === 'start_break') newStatus = 'break';
+      else if (action === 'start_break') {
+        newStatus = 'break';
+        breakStartTime = new Date().toISOString();
+      }
       else if (action === 'end_break') newStatus = 'working';
       else if (action === 'end_work') newStatus = 'offline';
 
-      await this.updateUserStatus(userId, newStatus);
+      await this.updateUserStatus(userId, newStatus, breakStartTime);
 
       const { data, error } = await supabase
         .from('time_logs')
