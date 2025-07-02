@@ -1,19 +1,13 @@
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
+import { apiClient, UpdateUserRequest } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 
 export const useGetAllUsers = () => {
   return useQuery({
     queryKey: ['admin', 'users'],
     queryFn: () => apiClient.getAllUsers(),
-    // УБРАНО: refetchInterval, refetchOnWindowFocus, refetchOnReconnect
-    // Только ручное обновление по кнопке или при изменениях
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false, 
-    refetchInterval: false,
-    staleTime: 60000, // Данные считаются свежими 1 минуту
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchInterval: 30000, // Обновляем каждые 30 секунд
   });
 };
 
@@ -21,19 +15,19 @@ export const useUpdateUser = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ userId, data }: { userId: number; data: { name: string; role: string } }) => 
+    mutationFn: ({ userId, data }: { userId: string; data: UpdateUserRequest }) => 
       apiClient.updateUser(userId, data),
     onSuccess: () => {
-      // Немедленно обновляем данные пользователей после изменения
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
-      // Toast обрабатывается в компоненте для большего контроля
+      toast({
+        title: "Успешно",
+        description: "Данные пользователя обновлены",
+      });
     },
-     onError: (error: unknown) => {
-      console.error('Ошибка обновления пользователя:', error);
-      const message = (error as Error)?.message ?? 'Не удалось обновить данные пользователя';
+    onError: (error) => {
       toast({
         title: "Ошибка",
-        description: message,
+        description: error.message || "Не удалось обновить данные пользователя",
         variant: "destructive",
       });
     }
@@ -44,25 +38,29 @@ export const useDeleteUser = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (userId: number) => apiClient.deleteUser(userId),
+    mutationFn: (userId: string) => apiClient.deleteUser(userId),
     onSuccess: () => {
-      // Немедленно обновляем данные пользователей после удаления
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
-      // Toast обрабатывается в компоненте для большего контроля
+      toast({
+        title: "Удаление",
+        description: "Пользователь удален",
+        variant: "destructive",
+      });
     },
-    onError: (error: unknown) => {
-      console.error('Ошибка удаления пользователя:', error);
-      // Не показываем toast здесь, обрабатываем в компоненте
+    onError: (error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось удалить пользователя",
+        variant: "destructive",
+      });
     }
   });
 };
 
-export const useGetUserLogs = (userId: number) => {
+export const useGetUserLogs = (userId: string) => {
   return useQuery({
     queryKey: ['admin', 'user', userId, 'logs'],
     queryFn: () => apiClient.getUserLogs(userId),
     enabled: !!userId,
-    refetchOnWindowFocus: false,
-    staleTime: 30000,
   });
 };
