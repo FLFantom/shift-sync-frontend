@@ -193,7 +193,9 @@ const Dashboard = () => {
   };
 
   const handleLogout = () => {
-    logout();
+    if (logout) {
+      logout();
+    }
     navigate('/login');
   };
 
