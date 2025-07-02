@@ -345,7 +345,7 @@ const Dashboard = () => {
                   </div>
                   <Coffee className="w-8 h-8 text-orange-600" />
                 </div>
-              </div>
+              </CardContent>
             </Card>
           )}
         </div>
